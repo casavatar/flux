@@ -1,0 +1,14 @@
+[
+    {
+        "merged": "com.example.flux.data-merged_res-21:/layout/notification_template_part_time.xml",
+        "source": "com.example.flux.data-core-1.8.0-6:/layout/notification_template_part_time.xml"
+    },
+    {
+        "merged": "com.example.flux.data-merged_res-21:/layout/custom_dialog.xml",
+        "source": "com.example.flux.data-core-1.8.0-6:/layout/custom_dialog.xml"
+    },
+    {
+        "merged": "com.example.flux.data-merged_res-21:/layout/notification_template_part_chronometer.xml",
+        "source": "com.example.flux.data-core-1.8.0-6:/layout/notification_template_part_chronometer.xml"
+    }
+]

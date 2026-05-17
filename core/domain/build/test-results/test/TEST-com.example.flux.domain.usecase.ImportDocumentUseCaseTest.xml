@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.flux.domain.usecase.ImportDocumentUseCaseTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-05-17T21:48:59" hostname="STARKS_MSI" time="1.714">
+  <properties/>
+  <testcase name="unsupported MIME type returns UnsupportedFormatException" classname="com.example.flux.domain.usecase.ImportDocumentUseCaseTest" time="1.582"/>
+  <testcase name="null display name falls back to last path segment without extension" classname="com.example.flux.domain.usecase.ImportDocumentUseCaseTest" time="0.053"/>
+  <testcase name="repository exception propagates as failure" classname="com.example.flux.domain.usecase.ImportDocumentUseCaseTest" time="0.014"/>
+  <testcase name="valid TXT URI returns success with correct format" classname="com.example.flux.domain.usecase.ImportDocumentUseCaseTest" time="0.01"/>
+  <testcase name="null MIME type returns UnsupportedFormatException" classname="com.example.flux.domain.usecase.ImportDocumentUseCaseTest" time="0.006"/>
+  <testcase name="SecurityException from permission call returns PermissionException" classname="com.example.flux.domain.usecase.ImportDocumentUseCaseTest" time="0.004"/>
+  <testcase name="valid EPUB URI returns success and inserts book" classname="com.example.flux.domain.usecase.ImportDocumentUseCaseTest" time="0.029"/>
+  <testcase name="valid PDF URI returns success with correct format" classname="com.example.flux.domain.usecase.ImportDocumentUseCaseTest" time="0.016"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

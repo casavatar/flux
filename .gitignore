@@ -1,0 +1,34 @@
+# Android Studio
+*.iml
+
+# Gradle files
+.gradle
+
+# Gradle Wrapper
+.externalNativeBuild
+
+# C++ files
+.cxx
+
+# Local propierties
+/local.properties
+local.properties
+
+# Jetbrains
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+
+# OS files
+.DS_Store
+
+# Build files
+/build
+/captures
+
+# Claude module
+.claude
+CLAUDE.md

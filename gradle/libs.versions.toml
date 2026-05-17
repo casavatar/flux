@@ -1,0 +1,84 @@
+[versions]
+agp = "8.2.0"
+kotlin = "2.0.0"
+hilt = "2.48"
+room = "2.6.1"
+compose-bom = "2024.06.00"
+coroutines = "1.8.0"
+datastore = "1.1.1"
+workmanager = "2.9.0"
+navigation-compose = "2.7.7"
+coil = "2.6.0"
+mockk = "1.13.8"
+junit4 = "4.13.2"
+junit-ext = "1.1.5"
+espresso = "3.5.1"
+
+[libraries]
+# Core
+androidx-core-ktx          = { group = "androidx.core",              name = "core-ktx",              version = "1.12.0"  }
+androidx-appcompat         = { group = "androidx.appcompat",          name = "appcompat",             version = "1.6.1"   }
+material                   = { group = "com.google.android.material", name = "material",              version = "1.9.0"   }
+androidx-constraintlayout  = { group = "androidx.constraintlayout",   name = "constraintlayout",      version = "2.1.4"   }
+androidx-activity-compose  = { group = "androidx.activity",           name = "activity-compose",      version = "1.8.2"   }
+
+# Compose (BOM-managed)
+compose-bom              = { group = "androidx.compose",      name = "compose-bom",           version.ref = "compose-bom" }
+compose-ui               = { group = "androidx.compose.ui",   name = "ui"                                                 }
+compose-ui-graphics      = { group = "androidx.compose.ui",   name = "ui-graphics"                                        }
+compose-ui-preview       = { group = "androidx.compose.ui",   name = "ui-tooling-preview"                                 }
+compose-material3        = { group = "androidx.compose.material3", name = "material3"                                     }
+compose-ui-tooling       = { group = "androidx.compose.ui",   name = "ui-tooling"                                         }
+compose-ui-test-manifest = { group = "androidx.compose.ui",   name = "ui-test-manifest"                                   }
+compose-ui-test-junit4   = { group = "androidx.compose.ui",   name = "ui-test-junit4"                                     }
+androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigation-compose" }
+
+# Hilt
+hilt-android              = { group = "com.google.dagger",  name = "hilt-android",            version.ref = "hilt" }
+hilt-compiler             = { group = "com.google.dagger",  name = "hilt-android-compiler",   version.ref = "hilt" }
+hilt-testing              = { group = "com.google.dagger",  name = "hilt-android-testing",    version.ref = "hilt" }
+hilt-navigation-compose   = { group = "androidx.hilt",      name = "hilt-navigation-compose", version = "1.2.0"    }
+
+# Room
+room-runtime  = { group = "androidx.room", name = "room-runtime",  version.ref = "room" }
+room-ktx      = { group = "androidx.room", name = "room-ktx",      version.ref = "room" }
+room-compiler = { group = "androidx.room", name = "room-compiler",  version.ref = "room" }
+room-testing  = { group = "androidx.room", name = "room-testing",   version.ref = "room" }
+
+# DataStore
+datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
+
+# WorkManager
+workmanager-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workmanager" }
+
+# Coroutines
+coroutines-core    = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core",    version.ref = "coroutines" }
+coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+coroutines-test    = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test",    version.ref = "coroutines" }
+
+# Coil
+coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
+
+# Readium 3 (used in GEE-83; verify release tag before upgrading)
+readium-shared    = { group = "org.readium.kotlin-toolkit", name = "readium-shared",    version = "3.0.0-alpha.2" }
+readium-streamer  = { group = "org.readium.kotlin-toolkit", name = "readium-streamer",  version = "3.0.0-alpha.2" }
+readium-navigator = { group = "org.readium.kotlin-toolkit", name = "readium-navigator", version = "3.0.0-alpha.2" }
+
+# DI
+javax-inject = { group = "javax.inject", name = "javax.inject", version = "1" }
+
+# Test
+junit4             = { group = "junit",                   name = "junit",          version.ref = "junit4"   }
+mockk              = { group = "io.mockk",                name = "mockk",          version.ref = "mockk"    }
+kotlin-test        = { group = "org.jetbrains.kotlin",    name = "kotlin-test"                              }
+androidx-test-junit = { group = "androidx.test.ext",      name = "junit",          version.ref = "junit-ext" }
+espresso-core      = { group = "androidx.test.espresso",  name = "espresso-core",  version.ref = "espresso" }
+
+[plugins]
+android-application  = { id = "com.android.application",               version.ref = "agp"    }
+android-library      = { id = "com.android.library",                   version.ref = "agp"    }
+kotlin-android       = { id = "org.jetbrains.kotlin.android",          version.ref = "kotlin" }
+kotlin-jvm           = { id = "org.jetbrains.kotlin.jvm",              version.ref = "kotlin" }
+kotlin-compose       = { id = "org.jetbrains.kotlin.plugin.compose",   version.ref = "kotlin" }
+kotlin-kapt          = { id = "org.jetbrains.kotlin.kapt",             version.ref = "kotlin" }
+hilt                 = { id = "com.google.dagger.hilt.android",        version.ref = "hilt"   }

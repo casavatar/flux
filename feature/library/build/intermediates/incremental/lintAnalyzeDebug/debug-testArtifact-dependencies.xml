@@ -1,0 +1,26 @@
+<dependencies>
+  <compile
+      roots=":@@:feature:library::debug,org.jetbrains.kotlin:kotlin-stdlib:2.0.0@jar,org.jetbrains:annotations:13.0@jar">
+    <dependency
+        name=":@@:feature:library::debug"
+        simpleName="Flux.feature:library"/>
+    <dependency
+        name="org.jetbrains.kotlin:kotlin-stdlib:2.0.0@jar"
+        simpleName="org.jetbrains.kotlin:kotlin-stdlib"/>
+    <dependency
+        name="org.jetbrains:annotations:13.0@jar"
+        simpleName="org.jetbrains:annotations"/>
+  </compile>
+  <package
+      roots=":@@:feature:library::debug,org.jetbrains.kotlin:kotlin-stdlib:2.0.0@jar,org.jetbrains:annotations:13.0@jar">
+    <dependency
+        name=":@@:feature:library::debug"
+        simpleName="Flux.feature:library"/>
+    <dependency
+        name="org.jetbrains.kotlin:kotlin-stdlib:2.0.0@jar"
+        simpleName="org.jetbrains.kotlin:kotlin-stdlib"/>
+    <dependency
+        name="org.jetbrains:annotations:13.0@jar"
+        simpleName="org.jetbrains:annotations"/>
+  </package>
+</dependencies>

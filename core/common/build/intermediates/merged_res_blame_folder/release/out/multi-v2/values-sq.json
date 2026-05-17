@@ -1,0 +1,34 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.example.flux.common-mergeReleaseResources-10:/values-sq/values-sq.xml",
+            "map": [
+                {
+                    "source": "C:\\Users\\ingek\\.gradle\\caches\\transforms-3\\6a35bad6afa691094ecfcff6193e494d\\transformed\\core-1.8.0\\res\\values-sq\\values-sq.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "100",
+                        "endOffsets": "151"
+                    }
+                }
+            ]
+        },
+        {
+            "outputFile": "com.example.flux.common-merged_res-12:/values-sq/values-sq.xml",
+            "map": [
+                {
+                    "source": "C:\\Users\\ingek\\.gradle\\caches\\transforms-3\\6a35bad6afa691094ecfcff6193e494d\\transformed\\core-1.8.0\\res\\values-sq\\values-sq.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "100",
+                        "endOffsets": "151"
+                    }
+                }
+            ]
+        }
+    ]
+}
