@@ -1,7 +1,0 @@
-com.example.flux.feature.export-pngs-0 C:\Users\ingek\AndroidStudioProjects\Flux\feature\export\build\generated\res\pngs\release
-com.example.flux.feature.export-resValues-1 C:\Users\ingek\AndroidStudioProjects\Flux\feature\export\build\generated\res\resValues\release
-com.example.flux.feature.export-mergeReleaseResources-2 C:\Users\ingek\AndroidStudioProjects\Flux\feature\export\build\intermediates\incremental\release\mergeReleaseResources\merged.dir
-com.example.flux.feature.export-mergeReleaseResources-3 C:\Users\ingek\AndroidStudioProjects\Flux\feature\export\build\intermediates\incremental\release\mergeReleaseResources\stripped.dir
-com.example.flux.feature.export-merged_res-4 C:\Users\ingek\AndroidStudioProjects\Flux\feature\export\build\intermediates\merged_res\release
-com.example.flux.feature.export-main-5 C:\Users\ingek\AndroidStudioProjects\Flux\feature\export\src\main\res
-com.example.flux.feature.export-release-6 C:\Users\ingek\AndroidStudioProjects\Flux\feature\export\src\release\res

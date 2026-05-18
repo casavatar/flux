@@ -1,7 +1,0 @@
-com.example.flux.feature.library-pngs-0 C:\Users\ingek\AndroidStudioProjects\Flux\feature\library\build\generated\res\pngs\release
-com.example.flux.feature.library-resValues-1 C:\Users\ingek\AndroidStudioProjects\Flux\feature\library\build\generated\res\resValues\release
-com.example.flux.feature.library-mergeReleaseResources-2 C:\Users\ingek\AndroidStudioProjects\Flux\feature\library\build\intermediates\incremental\release\mergeReleaseResources\merged.dir
-com.example.flux.feature.library-mergeReleaseResources-3 C:\Users\ingek\AndroidStudioProjects\Flux\feature\library\build\intermediates\incremental\release\mergeReleaseResources\stripped.dir
-com.example.flux.feature.library-merged_res-4 C:\Users\ingek\AndroidStudioProjects\Flux\feature\library\build\intermediates\merged_res\release
-com.example.flux.feature.library-main-5 C:\Users\ingek\AndroidStudioProjects\Flux\feature\library\src\main\res
-com.example.flux.feature.library-release-6 C:\Users\ingek\AndroidStudioProjects\Flux\feature\library\src\release\res

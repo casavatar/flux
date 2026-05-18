@@ -1,7 +1,0 @@
-com.example.flux.feature.reader-pngs-0 C:\Users\ingek\AndroidStudioProjects\Flux\feature\reader\build\generated\res\pngs\release
-com.example.flux.feature.reader-resValues-1 C:\Users\ingek\AndroidStudioProjects\Flux\feature\reader\build\generated\res\resValues\release
-com.example.flux.feature.reader-mergeReleaseResources-2 C:\Users\ingek\AndroidStudioProjects\Flux\feature\reader\build\intermediates\incremental\release\mergeReleaseResources\merged.dir
-com.example.flux.feature.reader-mergeReleaseResources-3 C:\Users\ingek\AndroidStudioProjects\Flux\feature\reader\build\intermediates\incremental\release\mergeReleaseResources\stripped.dir
-com.example.flux.feature.reader-merged_res-4 C:\Users\ingek\AndroidStudioProjects\Flux\feature\reader\build\intermediates\merged_res\release
-com.example.flux.feature.reader-main-5 C:\Users\ingek\AndroidStudioProjects\Flux\feature\reader\src\main\res
-com.example.flux.feature.reader-release-6 C:\Users\ingek\AndroidStudioProjects\Flux\feature\reader\src\release\res
