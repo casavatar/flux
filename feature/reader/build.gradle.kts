@@ -27,4 +27,8 @@ dependencies {
     implementation(libs.coroutines.android)
 
     debugImplementation(libs.compose.ui.tooling)
+
+    testImplementation(libs.junit4)
+    testImplementation(libs.mockk)
+    testImplementation(libs.coroutines.test)
 }

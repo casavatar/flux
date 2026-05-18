@@ -13,10 +13,12 @@ import com.example.flux.feature.reader.model.ReaderIntent
 import com.example.flux.feature.reader.model.ReaderPage
 import com.example.flux.feature.reader.model.ReaderUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -34,8 +36,13 @@ class ReaderViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<ReaderUiState>(ReaderUiState.Loading)
     val uiState: StateFlow<ReaderUiState> = _uiState.asStateFlow()
 
+    // Debounced persistence: rapid page flips collapse to a single DB write.
+    // extraBufferCapacity=64 ensures no flip event is dropped before debounce sees it.
+    private val pendingSave = MutableSharedFlow<Progress>(extraBufferCapacity = 64)
+
     init {
         loadBook()
+        collectPendingSaves()
     }
 
     private fun loadBook() {
@@ -91,6 +98,14 @@ class ReaderViewModel @Inject constructor(
         }
     }
 
+    private fun collectPendingSaves() {
+        viewModelScope.launch {
+            pendingSave
+                .debounce(DEBOUNCE_MS)
+                .collect { progress -> saveReadingProgress(progress) }
+        }
+    }
+
     fun onIntent(intent: ReaderIntent) {
         when (intent) {
             is ReaderIntent.PageChanged -> onPageChanged(intent.pageIndex)
@@ -102,20 +117,22 @@ class ReaderViewModel @Inject constructor(
         val current = _uiState.value as? ReaderUiState.Success ?: return
         if (current.currentPageIndex == pageIndex) return
         _uiState.value = current.copy(currentPageIndex = pageIndex)
-        viewModelScope.launch {
-            saveReadingProgress(
-                Progress(
-                    bookId = bookId,
-                    currentPage = pageIndex,
-                    totalPages = current.totalPages,
-                    lastReadAt = System.currentTimeMillis(),
-                )
+        pendingSave.tryEmit(
+            Progress(
+                bookId = bookId,
+                currentPage = pageIndex,
+                totalPages = current.totalPages,
+                lastReadAt = System.currentTimeMillis(),
             )
-        }
+        )
     }
 
     private fun toggleControls() {
         val current = _uiState.value as? ReaderUiState.Success ?: return
         _uiState.value = current.copy(controlsVisible = !current.controlsVisible)
+    }
+
+    companion object {
+        internal const val DEBOUNCE_MS = 500L
     }
 }
