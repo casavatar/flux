@@ -7,6 +7,12 @@
 # Gradle Wrapper
 .externalNativeBuild
 
+# Build output
+build/
+captures/
+outputs/
+intermediates/
+
 # C++ files
 .cxx
 
@@ -24,10 +30,6 @@ local.properties
 
 # OS files
 .DS_Store
-
-# Build files
-/build
-/captures
 
 # Claude module
 .claude

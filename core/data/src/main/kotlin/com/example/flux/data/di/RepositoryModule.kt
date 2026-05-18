@@ -3,9 +3,15 @@ package com.example.flux.data.di
 import android.content.ContentResolver
 import android.content.Context
 import com.example.flux.data.repository.BookRepositoryImpl
+import com.example.flux.data.repository.ProgressRepositoryImpl
 import com.example.flux.data.source.DocumentMetadataProviderImpl
+import com.example.flux.data.preferences.PreferencesRepositoryImpl
+import com.example.flux.data.source.FileStorageImpl
 import com.example.flux.domain.repository.BookRepository
+import com.example.flux.domain.repository.PreferencesRepository
+import com.example.flux.domain.repository.ProgressRepository
 import com.example.flux.domain.usecase.DocumentMetadataProvider
+import com.example.flux.domain.usecase.FileStorage
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -18,13 +24,20 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 abstract class RepositoryModule {
 
-    @Binds
-    @Singleton
+    @Binds @Singleton
     abstract fun bindBookRepository(impl: BookRepositoryImpl): BookRepository
 
-    @Binds
-    @Singleton
+    @Binds @Singleton
     abstract fun bindDocumentMetadataProvider(impl: DocumentMetadataProviderImpl): DocumentMetadataProvider
+
+    @Binds @Singleton
+    abstract fun bindFileStorage(impl: FileStorageImpl): FileStorage
+
+    @Binds @Singleton
+    abstract fun bindPreferencesRepository(impl: PreferencesRepositoryImpl): PreferencesRepository
+
+    @Binds @Singleton
+    abstract fun bindProgressRepository(impl: ProgressRepositoryImpl): ProgressRepository
 
     companion object {
         @Provides

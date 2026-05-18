@@ -1,105 +1,139 @@
 package com.example.flux.domain.usecase
 
+import app.cash.turbine.test
 import com.example.flux.domain.exception.PermissionException
 import com.example.flux.domain.exception.UnsupportedFormatException
 import com.example.flux.domain.model.BookFormat
 import com.example.flux.domain.repository.BookRepository
-import io.mockk.coEvery
 import io.mockk.coJustRun
-import io.mockk.coVerify
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.justRun
 import io.mockk.mockk
+import io.mockk.coVerify
 import kotlinx.coroutines.test.runTest
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
-import kotlin.test.assertTrue
 
 class ImportDocumentUseCaseTest {
 
     private val bookRepository: BookRepository = mockk()
     private val metadataProvider: DocumentMetadataProvider = mockk()
-    private val useCase = ImportDocumentUseCase(bookRepository, metadataProvider)
+    private val fileStorage: FileStorage = mockk()
+    private val useCase = ImportDocumentUseCase(bookRepository, metadataProvider, fileStorage)
+
+    private fun stubHappyPath(uri: String, mimeType: String, displayName: String) {
+        justRun { metadataProvider.takePersistablePermission(uri) }
+        every { metadataProvider.getMimeType(uri) } returns mimeType
+        every { metadataProvider.getDisplayName(uri) } returns displayName
+        every { metadataProvider.openInputStream(uri) } returns ByteArrayInputStream(ByteArray(0))
+        every { fileStorage.openOutputStream(any()) } returns ByteArrayOutputStream()
+        every { fileStorage.localUriFor(any()) } returns "file:///data/files/book"
+        coJustRun { bookRepository.insert(any()) }
+    }
 
     @Test
-    fun `valid EPUB URI returns success and inserts book`() = runTest {
+    fun `valid EPUB URI emits Importing then Success`() = runTest {
         val uri = "content://com.example.provider/file.epub"
-        justRun { metadataProvider.takePersistablePermission(uri) }
-        every { metadataProvider.getMimeType(uri) } returns "application/epub+zip"
-        every { metadataProvider.getDisplayName(uri) } returns "My Book.epub"
-        coJustRun { bookRepository.insert(any()) }
+        stubHappyPath(uri, "application/epub+zip", "My Book.epub")
 
-        val result = useCase(uri)
-
-        assertTrue(result.isSuccess)
-        assertEquals(BookFormat.EPUB, result.getOrNull()?.format)
-        assertEquals("My Book", result.getOrNull()?.title)
-        assertEquals(uri, result.getOrNull()?.fileUri)
-        coVerify(exactly = 1) { bookRepository.insert(any()) }
+        useCase(uri).test {
+            assertIs<ImportResult.Importing>(awaitItem())
+            val success = awaitItem()
+            assertIs<ImportResult.Success>(success)
+            awaitComplete()
+        }
     }
 
     @Test
-    fun `valid PDF URI returns success with correct format`() = runTest {
+    fun `valid EPUB import inserts book with correct format and title`() = runTest {
+        val uri = "content://com.example.provider/file.epub"
+        stubHappyPath(uri, "application/epub+zip", "My Book.epub")
+
+        useCase(uri).test {
+            awaitItem() // Importing
+            awaitItem() // Success
+            awaitComplete()
+        }
+
+        coVerify(exactly = 1) {
+            bookRepository.insert(match { it.format == BookFormat.EPUB && it.title == "My Book" })
+        }
+    }
+
+    @Test
+    fun `valid PDF URI emits Success with PDF format`() = runTest {
         val uri = "content://com.example.provider/report.pdf"
-        justRun { metadataProvider.takePersistablePermission(uri) }
-        every { metadataProvider.getMimeType(uri) } returns "application/pdf"
-        every { metadataProvider.getDisplayName(uri) } returns "report.pdf"
-        coJustRun { bookRepository.insert(any()) }
+        stubHappyPath(uri, "application/pdf", "report.pdf")
 
-        val result = useCase(uri)
+        useCase(uri).test {
+            awaitItem()
+            awaitItem()
+            awaitComplete()
+        }
 
-        assertTrue(result.isSuccess)
-        assertEquals(BookFormat.PDF, result.getOrNull()?.format)
+        coVerify(exactly = 1) { bookRepository.insert(match { it.format == BookFormat.PDF }) }
     }
 
     @Test
-    fun `valid TXT URI returns success with correct format`() = runTest {
+    fun `valid TXT URI emits Success with TXT format`() = runTest {
         val uri = "content://com.example.provider/story.txt"
-        justRun { metadataProvider.takePersistablePermission(uri) }
-        every { metadataProvider.getMimeType(uri) } returns "text/plain"
-        every { metadataProvider.getDisplayName(uri) } returns "story.txt"
-        coJustRun { bookRepository.insert(any()) }
+        stubHappyPath(uri, "text/plain", "story.txt")
 
-        val result = useCase(uri)
+        useCase(uri).test {
+            awaitItem()
+            awaitItem()
+            awaitComplete()
+        }
 
-        assertTrue(result.isSuccess)
-        assertEquals(BookFormat.TXT, result.getOrNull()?.format)
+        coVerify(exactly = 1) { bookRepository.insert(match { it.format == BookFormat.TXT }) }
     }
 
     @Test
-    fun `unsupported MIME type returns UnsupportedFormatException`() = runTest {
+    fun `unsupported MIME type emits Error with UnsupportedFormatException`() = runTest {
         val uri = "content://com.example.provider/doc.docx"
         justRun { metadataProvider.takePersistablePermission(uri) }
         every { metadataProvider.getMimeType(uri) } returns "application/msword"
 
-        val result = useCase(uri)
-
-        assertTrue(result.isFailure)
-        assertIs<UnsupportedFormatException>(result.exceptionOrNull())
+        useCase(uri).test {
+            assertIs<ImportResult.Importing>(awaitItem())
+            val error = awaitItem()
+            assertIs<ImportResult.Error>(error)
+            assertIs<UnsupportedFormatException>(error.cause)
+            awaitComplete()
+        }
     }
 
     @Test
-    fun `null MIME type returns UnsupportedFormatException`() = runTest {
+    fun `null MIME type emits Error with UnsupportedFormatException`() = runTest {
         val uri = "content://com.example.provider/unknown"
         justRun { metadataProvider.takePersistablePermission(uri) }
         every { metadataProvider.getMimeType(uri) } returns null
 
-        val result = useCase(uri)
-
-        assertTrue(result.isFailure)
-        assertIs<UnsupportedFormatException>(result.exceptionOrNull())
+        useCase(uri).test {
+            assertIs<ImportResult.Importing>(awaitItem())
+            val error = awaitItem()
+            assertIs<ImportResult.Error>(error)
+            assertIs<UnsupportedFormatException>(error.cause)
+            awaitComplete()
+        }
     }
 
     @Test
-    fun `SecurityException from permission call returns PermissionException`() = runTest {
+    fun `SecurityException from permission emits Error with PermissionException`() = runTest {
         val uri = "content://com.example.provider/file.epub"
         every { metadataProvider.takePersistablePermission(uri) } throws SecurityException("denied")
 
-        val result = useCase(uri)
-
-        assertTrue(result.isFailure)
-        assertIs<PermissionException>(result.exceptionOrNull())
+        useCase(uri).test {
+            assertIs<ImportResult.Importing>(awaitItem())
+            val error = awaitItem()
+            assertIs<ImportResult.Error>(error)
+            assertIs<PermissionException>(error.cause)
+            awaitComplete()
+        }
     }
 
     @Test
@@ -108,25 +142,53 @@ class ImportDocumentUseCaseTest {
         justRun { metadataProvider.takePersistablePermission(uri) }
         every { metadataProvider.getMimeType(uri) } returns "application/pdf"
         every { metadataProvider.getDisplayName(uri) } returns null
+        every { metadataProvider.openInputStream(uri) } returns ByteArrayInputStream(ByteArray(0))
+        every { fileStorage.openOutputStream(any()) } returns ByteArrayOutputStream()
+        every { fileStorage.localUriFor(any()) } returns "file:///data/files/book"
         coJustRun { bookRepository.insert(any()) }
 
-        val result = useCase(uri)
+        useCase(uri).test {
+            awaitItem()
+            awaitItem()
+            awaitComplete()
+        }
 
-        assertTrue(result.isSuccess)
-        assertEquals("my-book", result.getOrNull()?.title)
+        coVerify(exactly = 1) { bookRepository.insert(match { it.title == "my-book" }) }
     }
 
     @Test
-    fun `repository exception propagates as failure`() = runTest {
+    fun `repository exception emits Error`() = runTest {
         val uri = "content://com.example.provider/file.epub"
         justRun { metadataProvider.takePersistablePermission(uri) }
         every { metadataProvider.getMimeType(uri) } returns "application/epub+zip"
         every { metadataProvider.getDisplayName(uri) } returns "file.epub"
+        every { metadataProvider.openInputStream(uri) } returns ByteArrayInputStream(ByteArray(0))
+        every { fileStorage.openOutputStream(any()) } returns ByteArrayOutputStream()
+        every { fileStorage.localUriFor(any()) } returns "file:///data/files/book"
         coEvery { bookRepository.insert(any()) } throws RuntimeException("DB error")
 
-        val result = useCase(uri)
+        useCase(uri).test {
+            assertIs<ImportResult.Importing>(awaitItem())
+            val error = awaitItem()
+            assertIs<ImportResult.Error>(error)
+            assertEquals("DB error", error.cause.message)
+            awaitComplete()
+        }
+    }
 
-        assertTrue(result.isFailure)
-        assertEquals("DB error", result.exceptionOrNull()?.message)
+    @Test
+    fun `book fileUri uses local storage path not original SAF uri`() = runTest {
+        val uri = "content://com.example.provider/file.epub"
+        stubHappyPath(uri, "application/epub+zip", "file.epub")
+
+        useCase(uri).test {
+            awaitItem()
+            awaitItem()
+            awaitComplete()
+        }
+
+        coVerify(exactly = 1) {
+            bookRepository.insert(match { it.fileUri == "file:///data/files/book" })
+        }
     }
 }

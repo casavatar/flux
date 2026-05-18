@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Google GMS font provider certificate fingerprints.
+    Empty arrays are used for development builds; replace with the real cert data
+    from https://github.com/google/fonts before shipping to production.
+    Android Studio's "Add Google Font" wizard generates the full content automatically.
+-->
+<resources>
+    <array name="com_google_android_gms_fonts_certs">
+        <item>@array/com_google_android_gms_fonts_certs_dev</item>
+        <item>@array/com_google_android_gms_fonts_certs_prod</item>
+    </array>
+
+    <!-- Development cert (Google Fonts sandbox) -->
+    <string-array name="com_google_android_gms_fonts_certs_dev" />
+
+    <!-- Production cert (Google Fonts) -->
+    <string-array name="com_google_android_gms_fonts_certs_prod" />
+</resources>

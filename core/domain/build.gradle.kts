@@ -10,4 +10,5 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.kotlin.test)
+    testImplementation(libs.turbine)
 }

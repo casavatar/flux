@@ -4,6 +4,7 @@ import android.content.ContentResolver
 import android.net.Uri
 import android.provider.OpenableColumns
 import com.example.flux.domain.usecase.DocumentMetadataProvider
+import java.io.InputStream
 import javax.inject.Inject
 
 class DocumentMetadataProviderImpl @Inject constructor(
@@ -11,11 +12,21 @@ class DocumentMetadataProviderImpl @Inject constructor(
 ) : DocumentMetadataProvider {
 
     override fun takePersistablePermission(uriString: String) {
-        val uri = Uri.parse(uriString)
         contentResolver.takePersistableUriPermission(
-            uri,
+            Uri.parse(uriString),
             android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION,
         )
+    }
+
+    override fun releasePersistablePermission(uriString: String) {
+        try {
+            contentResolver.releasePersistableUriPermission(
+                Uri.parse(uriString),
+                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            )
+        } catch (_: SecurityException) {
+            // Already released or never held — nothing to do.
+        }
     }
 
     override fun getMimeType(uriString: String): String? =
@@ -28,4 +39,7 @@ class DocumentMetadataProviderImpl @Inject constructor(
             if (nameIndex >= 0 && cursor.moveToFirst()) cursor.getString(nameIndex) else null
         }
     }
+
+    override fun openInputStream(uriString: String): InputStream? =
+        contentResolver.openInputStream(Uri.parse(uriString))
 }
