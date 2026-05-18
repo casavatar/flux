@@ -33,6 +33,9 @@ dependencies {
     implementation(libs.coroutines.android)
     implementation(libs.datastore.preferences)
 
+    implementation(libs.readium.shared)
+    implementation(libs.readium.streamer)
+
     testImplementation(libs.junit4)
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
