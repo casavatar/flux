@@ -1,5 +1,6 @@
 [versions]
 agp = "8.2.0"
+desugar-jdk-libs = "2.0.4"
 kotlin = "2.0.0"
 hilt = "2.48"
 room = "2.6.1"
@@ -18,6 +19,9 @@ junit-ext = "1.1.5"
 espresso = "3.5.1"
 
 [libraries]
+# Desugaring
+android-desugar-jdk-libs = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref = "desugar-jdk-libs" }
+
 # Core
 androidx-core-ktx          = { group = "androidx.core",              name = "core-ktx",              version = "1.12.0"  }
 androidx-appcompat         = { group = "androidx.appcompat",          name = "appcompat",             version = "1.6.1"   }
@@ -72,9 +76,9 @@ coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coi
 compose-ui-text-google-fonts = { group = "androidx.compose.ui", name = "ui-text-google-fonts" }
 
 # Readium 3 (used in GEE-83; verify release tag before upgrading)
-readium-shared    = { group = "org.readium.kotlin-toolkit", name = "readium-shared",    version = "3.0.0-alpha.2" }
-readium-streamer  = { group = "org.readium.kotlin-toolkit", name = "readium-streamer",  version = "3.0.0-alpha.2" }
-readium-navigator = { group = "org.readium.kotlin-toolkit", name = "readium-navigator", version = "3.0.0-alpha.2" }
+readium-shared    = { group = "org.readium.kotlin-toolkit", name = "readium-shared",    version = "3.0.3" }
+readium-streamer  = { group = "org.readium.kotlin-toolkit", name = "readium-streamer",  version = "3.0.3" }
+readium-navigator = { group = "org.readium.kotlin-toolkit", name = "readium-navigator", version = "3.0.3" }
 
 # DI
 javax-inject = { group = "javax.inject", name = "javax.inject", version = "1" }

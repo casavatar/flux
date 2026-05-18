@@ -11,7 +11,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.readium.r2.streamer.Readium
+import org.readium.r2.shared.util.asset.AssetRetriever
+import org.readium.r2.shared.util.http.DefaultHttpClient
+import org.readium.r2.streamer.PublicationOpener
+import org.readium.r2.streamer.parser.DefaultPublicationParser
 
 @RunWith(AndroidJUnit4::class)
 class ReadiumEpubParserTest {
@@ -22,7 +25,19 @@ class ReadiumEpubParserTest {
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
-        parser = ReadiumEpubParser(Readium(context))
+        val httpClient = DefaultHttpClient()
+        val assetRetriever = AssetRetriever(
+            contentResolver = context.contentResolver,
+            httpClient = httpClient,
+        )
+        val publicationOpener = PublicationOpener(
+            publicationParser = DefaultPublicationParser(
+                context = context,
+                httpClient = httpClient,
+                assetRetriever = assetRetriever,
+            )
+        )
+        parser = ReadiumEpubParser(assetRetriever, publicationOpener)
     }
 
     // GIVEN a valid EPUB with 50+ chapters

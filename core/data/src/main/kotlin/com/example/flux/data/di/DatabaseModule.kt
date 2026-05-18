@@ -3,7 +3,9 @@ package com.example.flux.data.di
 import android.content.Context
 import androidx.room.Room
 import com.example.flux.data.local.BookDao
+import com.example.flux.data.local.ExportJobDao
 import com.example.flux.data.local.FluxDatabase
+import com.example.flux.data.local.ProgressDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -23,4 +25,10 @@ object DatabaseModule {
 
     @Provides
     fun provideBookDao(db: FluxDatabase): BookDao = db.bookDao()
+
+    @Provides
+    fun provideProgressDao(db: FluxDatabase): ProgressDao = db.progressDao()
+
+    @Provides
+    fun provideExportJobDao(db: FluxDatabase): ExportJobDao = db.exportJobDao()
 }

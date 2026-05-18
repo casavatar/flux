@@ -9,33 +9,36 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.readium.r2.shared.publication.Publication
 import org.readium.r2.shared.util.AbsoluteUrl
-import org.readium.r2.streamer.Readium
+import org.readium.r2.shared.util.Try
+import org.readium.r2.shared.util.asset.AssetRetriever
+import org.readium.r2.streamer.PublicationOpener
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class ReadiumEpubParser @Inject constructor(
-    private val readium: Readium,
+    private val assetRetriever: AssetRetriever,
+    private val publicationOpener: PublicationOpener,
 ) {
     suspend fun parse(bookId: String, fileUri: String): BookParseResult {
         val url = AbsoluteUrl(fileUri)
             ?: return BookParseResult.Error.Unknown(IllegalArgumentException("Invalid URI: $fileUri"))
 
-        val asset = withContext(Dispatchers.IO) {
-            readium.assetRetriever.retrieve(url)
-        }.getOrElse { error ->
-            return BookParseResult.Error.Unknown(Exception(error.toString()))
+        val asset = when (val r = withContext(Dispatchers.IO) { assetRetriever.retrieve(url) }) {
+            is Try.Success -> r.value
+            is Try.Failure -> return BookParseResult.Error.Unknown(Exception(r.value.toString()))
         }
 
-        val publication = readium.opener
-            .open(asset, allowUserInteraction = false)
-            .getOrElse { error ->
-                return if (isDrmProtectedError(error)) {
-                    BookParseResult.Error.DrmProtected
-                } else {
-                    BookParseResult.Error.CorruptFile(Exception(error.toString()))
-                }
+        val publication = when (val r = withContext(Dispatchers.IO) {
+            publicationOpener.open(asset, allowUserInteraction = false)
+        }) {
+            is Try.Success -> r.value
+            is Try.Failure -> return if (isDrmProtectedError(r.value)) {
+                BookParseResult.Error.DrmProtected
+            } else {
+                BookParseResult.Error.CorruptFile(Exception(r.value.toString()))
             }
+        }
 
         return mapToResult(publication, bookId, fileUri)
     }
@@ -58,25 +61,23 @@ class ReadiumEpubParser @Inject constructor(
         val chapters = publication.tableOfContents.mapIndexed { index, link ->
             Chapter(
                 title = link.title ?: "Chapter ${index + 1}",
-                href = link.href.string,
+                href = link.href.toString(),
                 position = index,
             )
         }
 
         val readingOrder = publication.readingOrder.map { link ->
             ReadingOrderItem(
-                href = link.href.string,
+                href = link.href.toString(),
                 mediaType = link.mediaType?.toString() ?: "application/xhtml+xml",
             )
         }
-
-        val estimatedPageCount = publication.pageList.size.takeIf { it > 0 }
 
         return BookParseResult.Success(
             book = book,
             chapters = chapters,
             readingOrder = readingOrder,
-            estimatedPageCount = estimatedPageCount,
+            estimatedPageCount = null, // pageList removed from Publication API in Readium 3.x
         )
     }
 
