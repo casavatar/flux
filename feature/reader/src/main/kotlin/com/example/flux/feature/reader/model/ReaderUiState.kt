@@ -14,5 +14,8 @@ sealed class ReaderUiState {
         val controlsVisible: Boolean = false,
     ) : ReaderUiState()
 
-    data class Error(val message: String) : ReaderUiState()
+    data class Error(
+        val message: String,
+        val canDelete: Boolean = false,
+    ) : ReaderUiState()
 }

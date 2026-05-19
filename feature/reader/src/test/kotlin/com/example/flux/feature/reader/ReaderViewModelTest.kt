@@ -7,6 +7,7 @@ import com.example.flux.domain.model.BookFormat
 import com.example.flux.domain.model.Progress
 import com.example.flux.domain.source.DocumentParser
 import com.example.flux.domain.source.ParseResult
+import com.example.flux.domain.usecase.DeleteBookUseCase
 import com.example.flux.domain.usecase.GetBookByIdUseCase
 import com.example.flux.domain.usecase.GetReadingProgressUseCase
 import com.example.flux.domain.usecase.SaveReadingProgressUseCase
@@ -21,6 +22,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
@@ -50,6 +52,7 @@ class ReaderViewModelTest {
     private val documentParserFactory = mockk<DocumentParserFactory>()
     private val getReadingProgress = mockk<GetReadingProgressUseCase>()
     private val saveReadingProgress = mockk<SaveReadingProgressUseCase>()
+    private val deleteBook = mockk<DeleteBookUseCase>()
 
     private val fakeBook = Book(
         id = "book-1",
@@ -95,6 +98,7 @@ class ReaderViewModelTest {
         documentParserFactory = documentParserFactory,
         getReadingProgress = getReadingProgress,
         saveReadingProgress = saveReadingProgress,
+        deleteBook = deleteBook,
     )
 
     // ── debounce ──────────────────────────────────────────────────────────────
@@ -263,5 +267,61 @@ class ReaderViewModelTest {
         val after = (vm.uiState.value as ReaderUiState.Success).controlsVisible
 
         assertEquals(!before, after)
+    }
+
+    // ── error recovery ────────────────────────────────────────────────────────
+
+    @Test
+    fun `SecurityException from parser emits Error state with canDelete true`() = runTest {
+        val parser = mockk<DocumentParser>()
+        coEvery { parser.parse(any()) } returns flow {
+            emit(ParseResult.Error(SecurityException("Permission denied")))
+        }
+        every { getBookById("book-1") } returns flowOf(fakeBook)
+        every { documentParserFactory.get(BookFormat.TXT) } returns parser
+        coEvery { getReadingProgress(any()) } returns null
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertTrue("Expected Error, got $state", state is ReaderUiState.Error)
+        assertTrue("Expected canDelete=true", (state as ReaderUiState.Error).canDelete)
+    }
+
+    @Test
+    fun `FileNotFoundException from parser emits Error state with canDelete true`() = runTest {
+        val parser = mockk<DocumentParser>()
+        coEvery { parser.parse(any()) } returns flow {
+            emit(ParseResult.Error(java.io.FileNotFoundException("file gone")))
+        }
+        every { getBookById("book-1") } returns flowOf(fakeBook)
+        every { documentParserFactory.get(BookFormat.TXT) } returns parser
+        coEvery { getReadingProgress(any()) } returns null
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        val state = vm.uiState.value as ReaderUiState.Error
+        assertTrue(state.canDelete)
+    }
+
+    @Test
+    fun `DeleteBook intent calls DeleteBookUseCase and emits navigation event`() = runTest {
+        setupBookLoad(pageCount = 5)
+        coJustRun { deleteBook(any()) }
+
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        val events = mutableListOf<Unit>()
+        val job = launch { vm.navigationEvents.collect { events.add(it) } }
+
+        vm.onIntent(ReaderIntent.DeleteBook)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { deleteBook("book-1") }
+        assertEquals(1, events.size)
+        job.cancel()
     }
 }
