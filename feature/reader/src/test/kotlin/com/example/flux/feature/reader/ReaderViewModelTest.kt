@@ -7,9 +7,11 @@ import com.example.flux.domain.model.BookFormat
 import com.example.flux.domain.model.Progress
 import com.example.flux.domain.source.DocumentParser
 import com.example.flux.domain.source.ParseResult
+import com.example.flux.domain.model.UserPreferences
 import com.example.flux.domain.usecase.DeleteBookUseCase
 import com.example.flux.domain.usecase.GetBookByIdUseCase
 import com.example.flux.domain.usecase.GetReadingProgressUseCase
+import com.example.flux.domain.usecase.GetUserPreferencesUseCase
 import com.example.flux.domain.usecase.SaveReadingProgressUseCase
 import com.example.flux.feature.reader.model.ReaderIntent
 import com.example.flux.feature.reader.model.ReaderUiState
@@ -21,9 +23,10 @@ import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -53,6 +56,8 @@ class ReaderViewModelTest {
     private val getReadingProgress = mockk<GetReadingProgressUseCase>()
     private val saveReadingProgress = mockk<SaveReadingProgressUseCase>()
     private val deleteBook = mockk<DeleteBookUseCase>()
+    private val getUserPreferences = mockk<GetUserPreferencesUseCase>()
+    private val fakePrefs = MutableStateFlow(UserPreferences())
 
     private val fakeBook = Book(
         id = "book-1",
@@ -68,6 +73,7 @@ class ReaderViewModelTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         coJustRun { saveReadingProgress(any()) }
+        every { getUserPreferences() } returns fakePrefs
     }
 
     @After
@@ -99,6 +105,7 @@ class ReaderViewModelTest {
         getReadingProgress = getReadingProgress,
         saveReadingProgress = saveReadingProgress,
         deleteBook = deleteBook,
+        getUserPreferences = getUserPreferences,
     )
 
     // ── debounce ──────────────────────────────────────────────────────────────
@@ -304,6 +311,47 @@ class ReaderViewModelTest {
 
         val state = vm.uiState.value as ReaderUiState.Error
         assertTrue(state.canDelete)
+    }
+
+    // ── font size preference ──────────────────────────────────────────────────
+
+    @Test
+    fun `font size from preferences is reflected in Success state on load`() = runTest {
+        fakePrefs.value = UserPreferences(defaultFontSizeSp = 20)
+        setupBookLoad(pageCount = 5)
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        val state = vm.uiState.value as ReaderUiState.Success
+        assertEquals(20, state.fontSizeSp)
+    }
+
+    @Test
+    fun `changing defaultFontSizeSp updates fontSizeSp in Success state after debounce`() = runTest {
+        fakePrefs.value = UserPreferences(defaultFontSizeSp = 16)
+        setupBookLoad(pageCount = 5)
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        fakePrefs.value = UserPreferences(defaultFontSizeSp = 24)
+        advanceUntilIdle() // advance past the 300ms debounce window
+
+        val state = vm.uiState.value as ReaderUiState.Success
+        assertEquals(24, state.fontSizeSp)
+    }
+
+    @Test
+    fun `font size change before debounce window does not update state`() = runTest {
+        fakePrefs.value = UserPreferences(defaultFontSizeSp = 16)
+        setupBookLoad(pageCount = 5)
+        val vm = createViewModel()
+        advanceUntilIdle()
+
+        fakePrefs.value = UserPreferences(defaultFontSizeSp = 24)
+        advanceTimeBy(ReaderViewModel.FONT_DEBOUNCE_MS - 1) // 299ms — debounce not yet fired
+
+        val state = vm.uiState.value as ReaderUiState.Success
+        assertEquals(16, state.fontSizeSp)
     }
 
     @Test

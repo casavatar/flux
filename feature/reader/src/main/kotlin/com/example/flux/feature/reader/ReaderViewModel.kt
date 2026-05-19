@@ -9,6 +9,7 @@ import com.example.flux.domain.source.ParseResult
 import com.example.flux.domain.usecase.DeleteBookUseCase
 import com.example.flux.domain.usecase.GetBookByIdUseCase
 import com.example.flux.domain.usecase.GetReadingProgressUseCase
+import com.example.flux.domain.usecase.GetUserPreferencesUseCase
 import com.example.flux.domain.usecase.SaveReadingProgressUseCase
 import com.example.flux.feature.reader.model.ReaderIntent
 import com.example.flux.feature.reader.model.ReaderPage
@@ -22,6 +23,8 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.io.FileNotFoundException
 import java.io.IOException
@@ -35,6 +38,7 @@ class ReaderViewModel @Inject constructor(
     private val getReadingProgress: GetReadingProgressUseCase,
     private val saveReadingProgress: SaveReadingProgressUseCase,
     private val deleteBook: DeleteBookUseCase,
+    private val getUserPreferences: GetUserPreferencesUseCase,
 ) : ViewModel() {
 
     private val bookId: String = checkNotNull(savedStateHandle["bookId"])
@@ -42,17 +46,33 @@ class ReaderViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<ReaderUiState>(ReaderUiState.Loading)
     val uiState: StateFlow<ReaderUiState> = _uiState.asStateFlow()
 
-    // One-shot events that signal the screen to navigate back.
     private val _navigationEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val navigationEvents: SharedFlow<Unit> = _navigationEvents.asSharedFlow()
 
     // Debounced persistence: rapid page flips collapse to a single DB write.
-    // extraBufferCapacity=64 ensures no flip event is dropped before debounce sees it.
     private val pendingSave = MutableSharedFlow<Progress>(extraBufferCapacity = 64)
+
+    // Tracks the latest font size so it can be embedded in Success states as they're built.
+    private var currentFontSizeSp: Int = ReaderUiState.DEFAULT_FONT_SIZE_SP
 
     init {
         loadBook()
         collectPendingSaves()
+        collectFontSizePreference()
+    }
+
+    private fun collectFontSizePreference() {
+        viewModelScope.launch {
+            getUserPreferences()
+                .map { it.defaultFontSizeSp }
+                .distinctUntilChanged()
+                .debounce(FONT_DEBOUNCE_MS)
+                .collect { fontSizeSp ->
+                    currentFontSizeSp = fontSizeSp
+                    val current = _uiState.value as? ReaderUiState.Success ?: return@collect
+                    _uiState.value = current.copy(fontSizeSp = fontSizeSp)
+                }
+        }
     }
 
     private fun loadBook() {
@@ -94,6 +114,7 @@ class ReaderViewModel @Inject constructor(
                                         currentPageIndex = previous?.currentPageIndex
                                             ?.coerceIn(0, result.totalPages - 1) ?: startPage,
                                         totalPages = result.totalPages,
+                                        fontSizeSp = currentFontSizeSp,
                                         controlsVisible = previous?.controlsVisible ?: false,
                                     )
                                 }
@@ -181,5 +202,6 @@ class ReaderViewModel @Inject constructor(
 
     companion object {
         internal const val DEBOUNCE_MS = 500L
+        internal const val FONT_DEBOUNCE_MS = 300L
     }
 }

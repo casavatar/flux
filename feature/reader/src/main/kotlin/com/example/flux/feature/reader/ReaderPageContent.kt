@@ -12,11 +12,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.flux.feature.reader.model.ReaderPage
 
 @Composable
 fun ReaderPageContent(
     page: ReaderPage,
+    fontSizeSp: Int,
     onTap: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -32,7 +34,10 @@ fun ReaderPageContent(
     ) {
         Text(
             text = page.text,
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.bodyLarge.copy(
+                fontSize = fontSizeSp.sp,
+                lineHeight = (fontSizeSp * 1.6f).sp,
+            ),
             overflow = TextOverflow.Clip,
         )
     }

@@ -172,6 +172,7 @@ private fun ReaderSuccessContent(
             state.pages.getOrNull(pageIndex)?.let { page ->
                 ReaderPageContent(
                     page = page,
+                    fontSizeSp = state.fontSizeSp,
                     onTap = { onIntent(ReaderIntent.ToggleControls) },
                     modifier = Modifier.fillMaxSize(),
                 )
