@@ -59,6 +59,21 @@ fun ReaderScreen(
         viewModel.navigationEvents.collect { onNavigateBack() }
     }
 
+    ReaderContent(
+        uiState = uiState,
+        onNavigateBack = onNavigateBack,
+        onIntent = viewModel::onIntent,
+        modifier = modifier,
+    )
+}
+
+@Composable
+internal fun ReaderContent(
+    uiState: ReaderUiState,
+    onNavigateBack: () -> Unit,
+    onIntent: (ReaderIntent) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     when (val state = uiState) {
         ReaderUiState.Loading -> {
             Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -70,14 +85,14 @@ fun ReaderScreen(
                 message = state.message,
                 canDelete = state.canDelete,
                 onNavigateBack = onNavigateBack,
-                onDeleteBook = { viewModel.onIntent(ReaderIntent.DeleteBook) },
+                onDeleteBook = { onIntent(ReaderIntent.DeleteBook) },
                 modifier = modifier,
             )
         }
         is ReaderUiState.Success -> {
             ReaderSuccessContent(
                 state = state,
-                onIntent = viewModel::onIntent,
+                onIntent = onIntent,
                 modifier = modifier,
             )
         }

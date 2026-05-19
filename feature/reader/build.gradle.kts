@@ -2,6 +2,7 @@ plugins {
     id("flux.android.feature")
     alias(libs.plugins.kotlin.compose)
     id("flux.hilt")
+    alias(libs.plugins.paparazzi)
 }
 
 android {
