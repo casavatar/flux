@@ -77,7 +77,6 @@ fun ReaderScreen(
         is ReaderUiState.Success -> {
             ReaderSuccessContent(
                 state = state,
-                onBack = onNavigateBack,
                 onIntent = viewModel::onIntent,
                 modifier = modifier,
             )
@@ -143,7 +142,6 @@ private fun ReaderErrorContent(
 @Composable
 private fun ReaderSuccessContent(
     state: ReaderUiState.Success,
-    onBack: () -> Unit,
     onIntent: (ReaderIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -195,7 +193,7 @@ private fun ReaderSuccessContent(
                         )
                     },
                     navigationIcon = {
-                        IconButton(onClick = onBack) {
+                        IconButton(onClick = { onIntent(ReaderIntent.NavigateBack) }) {
                             Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
                         }
                     },

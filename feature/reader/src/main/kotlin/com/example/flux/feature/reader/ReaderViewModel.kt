@@ -15,6 +15,8 @@ import com.example.flux.feature.reader.model.ReaderIntent
 import com.example.flux.feature.reader.model.ReaderPage
 import com.example.flux.feature.reader.model.ReaderUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -49,15 +51,14 @@ class ReaderViewModel @Inject constructor(
     private val _navigationEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val navigationEvents: SharedFlow<Unit> = _navigationEvents.asSharedFlow()
 
-    // Debounced persistence: rapid page flips collapse to a single DB write.
-    private val pendingSave = MutableSharedFlow<Progress>(extraBufferCapacity = 64)
+    // Job-based debounce: cancels the previous pending save on each page flip.
+    private var pendingSaveJob: Job? = null
+    private var latestPendingProgress: Progress? = null
 
-    // Tracks the latest font size so it can be embedded in Success states as they're built.
     private var currentFontSizeSp: Int = ReaderUiState.DEFAULT_FONT_SIZE_SP
 
     init {
         loadBook()
-        collectPendingSaves()
         collectFontSizePreference()
     }
 
@@ -158,39 +159,49 @@ class ReaderViewModel @Inject constructor(
         )
     }
 
-    private fun collectPendingSaves() {
-        viewModelScope.launch {
-            pendingSave
-                .debounce(DEBOUNCE_MS)
-                .collect { progress -> saveReadingProgress(progress) }
-        }
-    }
-
     fun onIntent(intent: ReaderIntent) {
         when (intent) {
             is ReaderIntent.PageChanged -> onPageChanged(intent.pageIndex)
             ReaderIntent.ToggleControls -> toggleControls()
             ReaderIntent.DeleteBook -> onDeleteBook()
+            ReaderIntent.NavigateBack -> onNavigateBack()
         }
     }
 
     private fun onPageChanged(pageIndex: Int) {
         val current = _uiState.value as? ReaderUiState.Success ?: return
-        if (current.currentPageIndex == pageIndex) return
-        _uiState.value = current.copy(currentPageIndex = pageIndex)
-        pendingSave.tryEmit(
-            Progress(
-                bookId = bookId,
-                currentPage = pageIndex,
-                totalPages = current.totalPages,
-                lastReadAt = System.currentTimeMillis(),
-            )
+        val clamped = pageIndex.coerceIn(0, current.totalPages - 1)
+        if (current.currentPageIndex == clamped) return
+        _uiState.value = current.copy(currentPageIndex = clamped)
+        val progress = Progress(
+            bookId = bookId,
+            currentPage = clamped,
+            totalPages = current.totalPages,
+            lastReadAt = System.currentTimeMillis(),
         )
+        latestPendingProgress = progress
+        pendingSaveJob?.cancel()
+        pendingSaveJob = viewModelScope.launch {
+            delay(DEBOUNCE_MS)
+            saveReadingProgress(progress)
+            latestPendingProgress = null
+        }
     }
 
     private fun toggleControls() {
         val current = _uiState.value as? ReaderUiState.Success ?: return
         _uiState.value = current.copy(controlsVisible = !current.controlsVisible)
+    }
+
+    private fun onNavigateBack() {
+        val progressToSave = latestPendingProgress
+        latestPendingProgress = null
+        pendingSaveJob?.cancel()
+        pendingSaveJob = null
+        viewModelScope.launch {
+            progressToSave?.let { saveReadingProgress(it) }
+            _navigationEvents.tryEmit(Unit)
+        }
     }
 
     private fun onDeleteBook() {

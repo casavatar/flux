@@ -20,36 +20,34 @@ import io.mockk.coJustRun
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 
 /**
  * Verifies debounced progress persistence and saved-page restoration.
  *
- * Virtual time is controlled by [StandardTestDispatcher]: rapid page-flip events are
- * emitted at T=0, then [advanceTimeBy] drives the scheduler past the debounce window to
- * confirm exactly one DB write occurs.
+ * Virtual time is controlled by [UnconfinedTestDispatcher] via [MainDispatcherRule]: coroutines
+ * start eagerly so delays are registered immediately, making [advanceTimeBy] fire them
+ * precisely. Passing [MainDispatcherRule.testDispatcher] to every [runTest] shares the single
+ * [TestCoroutineScheduler] between the test body and the ViewModel's viewModelScope.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ReaderViewModelTest {
 
-    private val testDispatcher = StandardTestDispatcher()
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
 
     private val getBookById = mockk<GetBookByIdUseCase>()
     private val documentParserFactory = mockk<DocumentParserFactory>()
@@ -71,14 +69,8 @@ class ReaderViewModelTest {
 
     @Before
     fun setUp() {
-        Dispatchers.setMain(testDispatcher)
         coJustRun { saveReadingProgress(any()) }
         every { getUserPreferences() } returns fakePrefs
-    }
-
-    @After
-    fun tearDown() {
-        Dispatchers.resetMain()
     }
 
     // ── test helpers ──────────────────────────────────────────────────────────
@@ -111,265 +103,324 @@ class ReaderViewModelTest {
     // ── debounce ──────────────────────────────────────────────────────────────
 
     @Test
-    fun `rapid page flips result in zero saves before debounce window`() = runTest {
-        setupBookLoad(pageCount = 100)
-        val vm = createViewModel()
-        advanceUntilIdle() // settle book load + page accumulation
+    fun `rapid page flips result in zero saves before debounce window`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            setupBookLoad(pageCount = 100)
+            val vm = createViewModel()
+            advanceUntilIdle() // settle book load + page accumulation
 
-        (1..20).forEach { i -> vm.onIntent(ReaderIntent.PageChanged(i)) }
+            (1..20).forEach { i -> vm.onIntent(ReaderIntent.PageChanged(i)) }
 
-        advanceTimeBy(ReaderViewModel.DEBOUNCE_MS - 1)
-        coVerify(exactly = 0) { saveReadingProgress(any()) }
-    }
-
-    @Test
-    fun `rapid page flips result in exactly one save after debounce window`() = runTest {
-        setupBookLoad(pageCount = 100)
-        val vm = createViewModel()
-        advanceUntilIdle()
-
-        (1..20).forEach { i -> vm.onIntent(ReaderIntent.PageChanged(i)) }
-
-        advanceTimeBy(ReaderViewModel.DEBOUNCE_MS)
-        coVerify(exactly = 1) { saveReadingProgress(any()) }
-    }
+            advanceTimeBy(ReaderViewModel.DEBOUNCE_MS - 1)
+            coVerify(exactly = 0) { saveReadingProgress(any()) }
+        }
 
     @Test
-    fun `debounce persists the last page in a rapid flip storm`() = runTest {
-        setupBookLoad(pageCount = 100)
-        val vm = createViewModel()
-        advanceUntilIdle()
+    fun `rapid page flips result in exactly one save after debounce window`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            setupBookLoad(pageCount = 100)
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        (1..20).forEach { i -> vm.onIntent(ReaderIntent.PageChanged(i)) }
-        advanceTimeBy(ReaderViewModel.DEBOUNCE_MS)
+            (1..20).forEach { i -> vm.onIntent(ReaderIntent.PageChanged(i)) }
 
-        coVerify { saveReadingProgress(match { it.currentPage == 20 }) }
-    }
-
-    @Test
-    fun `two page changes separated by debounce window each trigger a save`() = runTest {
-        setupBookLoad(pageCount = 100)
-        val vm = createViewModel()
-        advanceUntilIdle()
-
-        vm.onIntent(ReaderIntent.PageChanged(5))
-        advanceTimeBy(ReaderViewModel.DEBOUNCE_MS)
-
-        vm.onIntent(ReaderIntent.PageChanged(10))
-        advanceTimeBy(ReaderViewModel.DEBOUNCE_MS)
-
-        coVerify(exactly = 2) { saveReadingProgress(any()) }
-    }
+            advanceUntilIdle() // advance past debounce window
+            coVerify(exactly = 1) { saveReadingProgress(any()) }
+        }
 
     @Test
-    fun `page change within debounce window resets timer and delays save`() = runTest {
-        setupBookLoad(pageCount = 100)
-        val vm = createViewModel()
-        advanceUntilIdle()
+    fun `debounce persists the last page in a rapid flip storm`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            setupBookLoad(pageCount = 100)
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        vm.onIntent(ReaderIntent.PageChanged(3))
-        advanceTimeBy(ReaderViewModel.DEBOUNCE_MS - 100) // not yet past window
+            (1..20).forEach { i -> vm.onIntent(ReaderIntent.PageChanged(i)) }
+            advanceUntilIdle() // advance past debounce window
 
-        vm.onIntent(ReaderIntent.PageChanged(7)) // resets timer
-        advanceTimeBy(ReaderViewModel.DEBOUNCE_MS - 1) // still not past new window
-        coVerify(exactly = 0) { saveReadingProgress(any()) }
+            coVerify { saveReadingProgress(match { it.currentPage == 20 }) }
+        }
 
-        advanceTimeBy(1) // now past new window
-        coVerify(exactly = 1) { saveReadingProgress(match { it.currentPage == 7 }) }
-    }
+    @Test
+    fun `two page changes separated by debounce window each trigger a save`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            setupBookLoad(pageCount = 100)
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.onIntent(ReaderIntent.PageChanged(5))
+            advanceUntilIdle() // fire first debounce window
+
+            vm.onIntent(ReaderIntent.PageChanged(10))
+            advanceUntilIdle() // fire second debounce window
+
+            coVerify(exactly = 2) { saveReadingProgress(any()) }
+        }
+
+    @Test
+    fun `page change within debounce window resets timer and delays save`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            setupBookLoad(pageCount = 100)
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.onIntent(ReaderIntent.PageChanged(3))
+            advanceTimeBy(ReaderViewModel.DEBOUNCE_MS - 100) // not yet past window
+
+            vm.onIntent(ReaderIntent.PageChanged(7)) // resets timer
+            advanceTimeBy(ReaderViewModel.DEBOUNCE_MS - 1) // still not past new window
+            coVerify(exactly = 0) { saveReadingProgress(any()) }
+
+            advanceUntilIdle() // now past new window
+            coVerify(exactly = 1) { saveReadingProgress(match { it.currentPage == 7 }) }
+        }
 
     // ── progress restore ──────────────────────────────────────────────────────
 
     @Test
-    fun `saved progress page is restored when book opens`() = runTest {
-        setupBookLoad(
-            pageCount = 100,
-            savedProgress = Progress("book-1", currentPage = 47, totalPages = 100, lastReadAt = 0L),
-        )
-        val vm = createViewModel()
-        advanceUntilIdle()
+    fun `saved progress page is restored when book opens`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            setupBookLoad(
+                pageCount = 100,
+                savedProgress = Progress("book-1", currentPage = 47, totalPages = 100, lastReadAt = 0L),
+            )
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        val state = vm.uiState.value as ReaderUiState.Success
-        assertEquals(47, state.currentPageIndex)
-    }
-
-    @Test
-    fun `no saved progress opens book at page 0`() = runTest {
-        setupBookLoad(pageCount = 100, savedProgress = null)
-        val vm = createViewModel()
-        advanceUntilIdle()
-
-        val state = vm.uiState.value as ReaderUiState.Success
-        assertEquals(0, state.currentPageIndex)
-    }
+            val state = vm.uiState.value as ReaderUiState.Success
+            assertEquals(47, state.currentPageIndex)
+        }
 
     @Test
-    fun `saved progress page beyond new total is clamped to last page`() = runTest {
-        // Font grew — only 10 pages now, but progress was saved at page 50 with 100 pages
-        setupBookLoad(
-            pageCount = 10,
-            savedProgress = Progress("book-1", currentPage = 50, totalPages = 100, lastReadAt = 0L),
-        )
-        val vm = createViewModel()
-        advanceUntilIdle()
+    fun `no saved progress opens book at page 0`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            setupBookLoad(pageCount = 100, savedProgress = null)
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        val state = vm.uiState.value as ReaderUiState.Success
-        assertEquals(9, state.currentPageIndex)
-    }
+            val state = vm.uiState.value as ReaderUiState.Success
+            assertEquals(0, state.currentPageIndex)
+        }
+
+    @Test
+    fun `saved progress page beyond new total is clamped to last page`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            // Font grew — only 10 pages now, but progress was saved at page 50 with 100 pages
+            setupBookLoad(
+                pageCount = 10,
+                savedProgress = Progress("book-1", currentPage = 50, totalPages = 100, lastReadAt = 0L),
+            )
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val state = vm.uiState.value as ReaderUiState.Success
+            assertEquals(9, state.currentPageIndex)
+        }
 
     // ── ui state correctness ──────────────────────────────────────────────────
 
     @Test
-    fun `ui state is Success with correct page count after book loads`() = runTest {
-        setupBookLoad(pageCount = 50)
-        val vm = createViewModel()
-        advanceUntilIdle()
+    fun `ui state is Success with correct page count after book loads`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            setupBookLoad(pageCount = 50)
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        val state = vm.uiState.value
-        assertTrue(state is ReaderUiState.Success)
-        assertEquals(50, (state as ReaderUiState.Success).totalPages)
-        assertEquals(50, state.pages.size)
-    }
-
-    @Test
-    fun `book not found emits Error state`() = runTest {
-        every { getBookById("book-1") } returns flowOf(null)
-        val vm = createViewModel()
-        advanceUntilIdle()
-
-        assertTrue(vm.uiState.value is ReaderUiState.Error)
-    }
+            val state = vm.uiState.value
+            assertTrue(state is ReaderUiState.Success)
+            assertEquals(50, (state as ReaderUiState.Success).totalPages)
+            assertEquals(50, state.pages.size)
+        }
 
     @Test
-    fun `unsupported format emits Error state`() = runTest {
-        every { getBookById("book-1") } returns flowOf(fakeBook)
-        every { documentParserFactory.get(BookFormat.TXT) } throws NotImplementedError("unsupported")
-        val vm = createViewModel()
-        advanceUntilIdle()
+    fun `book not found emits Error state`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            every { getBookById("book-1") } returns flowOf(null)
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        assertTrue(vm.uiState.value is ReaderUiState.Error)
-    }
-
-    @Test
-    fun `page change updates currentPageIndex in ui state immediately`() = runTest {
-        setupBookLoad(pageCount = 100)
-        val vm = createViewModel()
-        advanceUntilIdle()
-
-        vm.onIntent(ReaderIntent.PageChanged(33))
-        advanceUntilIdle()
-
-        val state = vm.uiState.value as ReaderUiState.Success
-        assertEquals(33, state.currentPageIndex)
-    }
+            assertTrue(vm.uiState.value is ReaderUiState.Error)
+        }
 
     @Test
-    fun `toggle controls flips controlsVisible in ui state`() = runTest {
-        setupBookLoad(pageCount = 100)
-        val vm = createViewModel()
-        advanceUntilIdle()
+    fun `unsupported format emits Error state`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            every { getBookById("book-1") } returns flowOf(fakeBook)
+            every { documentParserFactory.get(BookFormat.TXT) } throws NotImplementedError("unsupported")
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        val before = (vm.uiState.value as ReaderUiState.Success).controlsVisible
-        vm.onIntent(ReaderIntent.ToggleControls)
-        val after = (vm.uiState.value as ReaderUiState.Success).controlsVisible
+            assertTrue(vm.uiState.value is ReaderUiState.Error)
+        }
 
-        assertEquals(!before, after)
-    }
+    @Test
+    fun `page change updates currentPageIndex in ui state immediately`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            setupBookLoad(pageCount = 100)
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.onIntent(ReaderIntent.PageChanged(33))
+
+            val state = vm.uiState.value as ReaderUiState.Success
+            assertEquals(33, state.currentPageIndex)
+        }
+
+    @Test
+    fun `toggle controls flips controlsVisible in ui state`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            setupBookLoad(pageCount = 100)
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val before = (vm.uiState.value as ReaderUiState.Success).controlsVisible
+            vm.onIntent(ReaderIntent.ToggleControls)
+            val after = (vm.uiState.value as ReaderUiState.Success).controlsVisible
+
+            assertEquals(!before, after)
+        }
 
     // ── error recovery ────────────────────────────────────────────────────────
 
     @Test
-    fun `SecurityException from parser emits Error state with canDelete true`() = runTest {
-        val parser = mockk<DocumentParser>()
-        coEvery { parser.parse(any()) } returns flow {
-            emit(ParseResult.Error(SecurityException("Permission denied")))
+    fun `SecurityException from parser emits Error state with canDelete true`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            val parser = mockk<DocumentParser>()
+            coEvery { parser.parse(any()) } returns flow {
+                emit(ParseResult.Error(SecurityException("Permission denied")))
+            }
+            every { getBookById("book-1") } returns flowOf(fakeBook)
+            every { documentParserFactory.get(BookFormat.TXT) } returns parser
+            coEvery { getReadingProgress(any()) } returns null
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val state = vm.uiState.value
+            assertTrue("Expected Error, got $state", state is ReaderUiState.Error)
+            assertTrue("Expected canDelete=true", (state as ReaderUiState.Error).canDelete)
         }
-        every { getBookById("book-1") } returns flowOf(fakeBook)
-        every { documentParserFactory.get(BookFormat.TXT) } returns parser
-        coEvery { getReadingProgress(any()) } returns null
-
-        val vm = createViewModel()
-        advanceUntilIdle()
-
-        val state = vm.uiState.value
-        assertTrue("Expected Error, got $state", state is ReaderUiState.Error)
-        assertTrue("Expected canDelete=true", (state as ReaderUiState.Error).canDelete)
-    }
 
     @Test
-    fun `FileNotFoundException from parser emits Error state with canDelete true`() = runTest {
-        val parser = mockk<DocumentParser>()
-        coEvery { parser.parse(any()) } returns flow {
-            emit(ParseResult.Error(java.io.FileNotFoundException("file gone")))
+    fun `FileNotFoundException from parser emits Error state with canDelete true`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            val parser = mockk<DocumentParser>()
+            coEvery { parser.parse(any()) } returns flow {
+                emit(ParseResult.Error(java.io.FileNotFoundException("file gone")))
+            }
+            every { getBookById("book-1") } returns flowOf(fakeBook)
+            every { documentParserFactory.get(BookFormat.TXT) } returns parser
+            coEvery { getReadingProgress(any()) } returns null
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val state = vm.uiState.value as ReaderUiState.Error
+            assertTrue(state.canDelete)
         }
-        every { getBookById("book-1") } returns flowOf(fakeBook)
-        every { documentParserFactory.get(BookFormat.TXT) } returns parser
-        coEvery { getReadingProgress(any()) } returns null
-
-        val vm = createViewModel()
-        advanceUntilIdle()
-
-        val state = vm.uiState.value as ReaderUiState.Error
-        assertTrue(state.canDelete)
-    }
 
     // ── font size preference ──────────────────────────────────────────────────
 
     @Test
-    fun `font size from preferences is reflected in Success state on load`() = runTest {
-        fakePrefs.value = UserPreferences(defaultFontSizeSp = 20)
-        setupBookLoad(pageCount = 5)
-        val vm = createViewModel()
-        advanceUntilIdle()
+    fun `font size from preferences is reflected in Success state on load`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            fakePrefs.value = UserPreferences(defaultFontSizeSp = 20)
+            setupBookLoad(pageCount = 5)
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        val state = vm.uiState.value as ReaderUiState.Success
-        assertEquals(20, state.fontSizeSp)
-    }
-
-    @Test
-    fun `changing defaultFontSizeSp updates fontSizeSp in Success state after debounce`() = runTest {
-        fakePrefs.value = UserPreferences(defaultFontSizeSp = 16)
-        setupBookLoad(pageCount = 5)
-        val vm = createViewModel()
-        advanceUntilIdle()
-
-        fakePrefs.value = UserPreferences(defaultFontSizeSp = 24)
-        advanceUntilIdle() // advance past the 300ms debounce window
-
-        val state = vm.uiState.value as ReaderUiState.Success
-        assertEquals(24, state.fontSizeSp)
-    }
+            val state = vm.uiState.value as ReaderUiState.Success
+            assertEquals(20, state.fontSizeSp)
+        }
 
     @Test
-    fun `font size change before debounce window does not update state`() = runTest {
-        fakePrefs.value = UserPreferences(defaultFontSizeSp = 16)
-        setupBookLoad(pageCount = 5)
-        val vm = createViewModel()
-        advanceUntilIdle()
+    fun `changing defaultFontSizeSp updates fontSizeSp in Success state after debounce`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            fakePrefs.value = UserPreferences(defaultFontSizeSp = 16)
+            setupBookLoad(pageCount = 5)
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        fakePrefs.value = UserPreferences(defaultFontSizeSp = 24)
-        advanceTimeBy(ReaderViewModel.FONT_DEBOUNCE_MS - 1) // 299ms — debounce not yet fired
+            fakePrefs.value = UserPreferences(defaultFontSizeSp = 24)
+            advanceUntilIdle() // advance past the 300ms debounce window
 
-        val state = vm.uiState.value as ReaderUiState.Success
-        assertEquals(16, state.fontSizeSp)
-    }
+            val state = vm.uiState.value as ReaderUiState.Success
+            assertEquals(24, state.fontSizeSp)
+        }
 
     @Test
-    fun `DeleteBook intent calls DeleteBookUseCase and emits navigation event`() = runTest {
-        setupBookLoad(pageCount = 5)
-        coJustRun { deleteBook(any()) }
+    fun `font size change before debounce window does not update state`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            fakePrefs.value = UserPreferences(defaultFontSizeSp = 16)
+            setupBookLoad(pageCount = 5)
+            val vm = createViewModel()
+            advanceUntilIdle()
 
-        val vm = createViewModel()
-        advanceUntilIdle()
+            fakePrefs.value = UserPreferences(defaultFontSizeSp = 24)
+            advanceTimeBy(ReaderViewModel.FONT_DEBOUNCE_MS - 1) // 299ms — debounce not yet fired
 
-        val events = mutableListOf<Unit>()
-        val job = launch { vm.navigationEvents.collect { events.add(it) } }
+            val state = vm.uiState.value as ReaderUiState.Success
+            assertEquals(16, state.fontSizeSp)
+        }
 
-        vm.onIntent(ReaderIntent.DeleteBook)
-        advanceUntilIdle()
+    // ── navigation ────────────────────────────────────────────────────────────
 
-        coVerify(exactly = 1) { deleteBook("book-1") }
-        assertEquals(1, events.size)
-        job.cancel()
-    }
+    @Test
+    fun `NavigateBack flushes in-flight progress save before navigation event`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            setupBookLoad(pageCount = 100)
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.onIntent(ReaderIntent.PageChanged(5))
+            // pending save is scheduled but delay has not elapsed
+
+            val events = mutableListOf<Unit>()
+            val job = launch { vm.navigationEvents.collect { events.add(it) } }
+
+            vm.onIntent(ReaderIntent.NavigateBack)
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { saveReadingProgress(match { it.currentPage == 5 }) }
+            assertEquals(1, events.size)
+            job.cancel()
+        }
+
+    @Test
+    fun `NavigateBack with no pending save emits navigation event without save`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            setupBookLoad(pageCount = 100)
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val events = mutableListOf<Unit>()
+            val job = launch { vm.navigationEvents.collect { events.add(it) } }
+
+            vm.onIntent(ReaderIntent.NavigateBack)
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { saveReadingProgress(any()) }
+            assertEquals(1, events.size)
+            job.cancel()
+        }
+
+    @Test
+    fun `DeleteBook intent calls DeleteBookUseCase and emits navigation event`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            setupBookLoad(pageCount = 5)
+            coJustRun { deleteBook(any()) }
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val events = mutableListOf<Unit>()
+            val job = launch { vm.navigationEvents.collect { events.add(it) } }
+
+            vm.onIntent(ReaderIntent.DeleteBook)
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { deleteBook("book-1") }
+            assertEquals(1, events.size)
+            job.cancel()
+        }
 }
