@@ -3,7 +3,9 @@ package com.example.flux.feature.reader
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.flux.data.bionic.BionicAnnotator
 import com.example.flux.data.parser.DocumentParserFactory
+import com.example.flux.domain.bionic.BionicEngine
 import com.example.flux.domain.model.Progress
 import com.example.flux.domain.source.ParseResult
 import com.example.flux.domain.usecase.DeleteBookUseCase
@@ -11,10 +13,12 @@ import com.example.flux.domain.usecase.GetBookByIdUseCase
 import com.example.flux.domain.usecase.GetReadingProgressUseCase
 import com.example.flux.domain.usecase.GetUserPreferencesUseCase
 import com.example.flux.domain.usecase.SaveReadingProgressUseCase
+import com.example.flux.feature.reader.model.PageCacheKey
 import com.example.flux.feature.reader.model.ReaderIntent
 import com.example.flux.feature.reader.model.ReaderPage
 import com.example.flux.feature.reader.model.ReaderUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -41,7 +45,11 @@ class ReaderViewModel @Inject constructor(
     private val saveReadingProgress: SaveReadingProgressUseCase,
     private val deleteBook: DeleteBookUseCase,
     private val getUserPreferences: GetUserPreferencesUseCase,
+    bionicEngine: BionicEngine,
+    bionicAnnotator: BionicAnnotator,
 ) : ViewModel() {
+
+    private val bionicCache = BionicPageCache(bionicEngine, bionicAnnotator)
 
     private val bookId: String = checkNotNull(savedStateHandle["bookId"])
 
@@ -51,11 +59,12 @@ class ReaderViewModel @Inject constructor(
     private val _navigationEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val navigationEvents: SharedFlow<Unit> = _navigationEvents.asSharedFlow()
 
-    // Job-based debounce: cancels the previous pending save on each page flip.
     private var pendingSaveJob: Job? = null
     private var latestPendingProgress: Progress? = null
+    private var preWarmJob: Job? = null
 
     private var currentFontSizeSp: Int = ReaderUiState.DEFAULT_FONT_SIZE_SP
+    private var currentBionicIntensity: Float = BionicEngine.DEFAULT_INTENSITY
 
     init {
         loadBook()
@@ -70,8 +79,10 @@ class ReaderViewModel @Inject constructor(
                 .debounce(FONT_DEBOUNCE_MS)
                 .collect { fontSizeSp ->
                     currentFontSizeSp = fontSizeSp
+                    bionicCache.evictAll()
                     val current = _uiState.value as? ReaderUiState.Success ?: return@collect
                     _uiState.value = current.copy(fontSizeSp = fontSizeSp)
+                    warmCacheAround(current.pages, current.currentPageIndex)
                 }
         }
     }
@@ -168,11 +179,37 @@ class ReaderViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Returns a bionic-annotated [AnnotatedString] for [pageIndex], computing and
+     * caching it on first access. Returns null if the reader is not in the Success state
+     * or the page index is out of range.
+     */
+    fun getAnnotatedPage(pageIndex: Int): androidx.compose.ui.text.AnnotatedString? {
+        val state = _uiState.value as? ReaderUiState.Success ?: return null
+        val page = state.pages.getOrNull(pageIndex) ?: return null
+        val key = PageCacheKey(bookId, page.index, currentBionicIntensity, currentFontSizeSp)
+        return bionicCache.getOrPut(key, page.text)
+    }
+
+    private fun warmCacheAround(pages: List<ReaderPage>, centerIndex: Int) {
+        preWarmJob?.cancel()
+        val intensity = currentBionicIntensity
+        val fontSizeSp = currentFontSizeSp
+        preWarmJob = viewModelScope.launch(Dispatchers.Default) {
+            for (offset in -PRE_WARM_WINDOW..PRE_WARM_WINDOW) {
+                val page = pages.getOrNull(centerIndex + offset) ?: continue
+                val key = PageCacheKey(bookId, page.index, intensity, fontSizeSp)
+                bionicCache.getOrPut(key, page.text)
+            }
+        }
+    }
+
     private fun onPageChanged(pageIndex: Int) {
         val current = _uiState.value as? ReaderUiState.Success ?: return
         val clamped = pageIndex.coerceIn(0, current.totalPages - 1)
         if (current.currentPageIndex == clamped) return
         _uiState.value = current.copy(currentPageIndex = clamped)
+        warmCacheAround(current.pages, clamped)
         val progress = Progress(
             bookId = bookId,
             currentPage = clamped,
@@ -214,5 +251,6 @@ class ReaderViewModel @Inject constructor(
     companion object {
         internal const val DEBOUNCE_MS = 500L
         internal const val FONT_DEBOUNCE_MS = 300L
+        internal const val PRE_WARM_WINDOW = 2
     }
 }

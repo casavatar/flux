@@ -1,7 +1,11 @@
 package com.example.flux.feature.reader
 
+import androidx.compose.ui.text.AnnotatedString
 import androidx.lifecycle.SavedStateHandle
+import com.example.flux.data.bionic.BionicAnnotator
 import com.example.flux.data.parser.DocumentParserFactory
+import com.example.flux.domain.bionic.BionicEngine
+import com.example.flux.domain.bionic.StyledWord
 import com.example.flux.domain.model.Book
 import com.example.flux.domain.model.BookFormat
 import com.example.flux.domain.model.Progress
@@ -50,6 +54,8 @@ class ReaderViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val getBookById = mockk<GetBookByIdUseCase>()
+    private val bionicEngine = mockk<BionicEngine>()
+    private val bionicAnnotator = mockk<BionicAnnotator>()
     private val documentParserFactory = mockk<DocumentParserFactory>()
     private val getReadingProgress = mockk<GetReadingProgressUseCase>()
     private val saveReadingProgress = mockk<SaveReadingProgressUseCase>()
@@ -71,6 +77,8 @@ class ReaderViewModelTest {
     fun setUp() {
         coJustRun { saveReadingProgress(any()) }
         every { getUserPreferences() } returns fakePrefs
+        every { bionicEngine.annotate(any(), any(), any(), any()) } returns emptyList()
+        every { bionicAnnotator.annotate(any(), any(), any()) } returns AnnotatedString("")
     }
 
     // ── test helpers ──────────────────────────────────────────────────────────
@@ -98,6 +106,8 @@ class ReaderViewModelTest {
         saveReadingProgress = saveReadingProgress,
         deleteBook = deleteBook,
         getUserPreferences = getUserPreferences,
+        bionicEngine = bionicEngine,
+        bionicAnnotator = bionicAnnotator,
     )
 
     // ── debounce ──────────────────────────────────────────────────────────────

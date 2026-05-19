@@ -36,6 +36,9 @@ dependencies {
     implementation(libs.readium.shared)
     implementation(libs.readium.streamer)
 
+    implementation(platform(libs.compose.bom))
+    implementation(libs.compose.ui)
+
     testImplementation(libs.junit4)
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
