@@ -6,13 +6,16 @@ import androidx.lifecycle.viewModelScope
 import com.example.flux.data.bionic.BionicAnnotator
 import com.example.flux.data.parser.DocumentParserFactory
 import com.example.flux.domain.bionic.BionicEngine
+import com.example.flux.domain.model.NightMode
 import com.example.flux.domain.model.Progress
 import com.example.flux.domain.source.ParseResult
 import com.example.flux.domain.usecase.DeleteBookUseCase
 import com.example.flux.domain.usecase.GetBookByIdUseCase
 import com.example.flux.domain.usecase.GetReadingProgressUseCase
 import com.example.flux.domain.usecase.GetUserPreferencesUseCase
+import com.example.flux.domain.usecase.PreferenceUpdate
 import com.example.flux.domain.usecase.SaveReadingProgressUseCase
+import com.example.flux.domain.usecase.SaveUserPreferencesUseCase
 import com.example.flux.feature.reader.model.PageCacheKey
 import com.example.flux.feature.reader.model.ReaderIntent
 import com.example.flux.feature.reader.model.ReaderPage
@@ -45,6 +48,7 @@ class ReaderViewModel @Inject constructor(
     private val saveReadingProgress: SaveReadingProgressUseCase,
     private val deleteBook: DeleteBookUseCase,
     private val getUserPreferences: GetUserPreferencesUseCase,
+    private val saveUserPreferences: SaveUserPreferencesUseCase,
     bionicEngine: BionicEngine,
     bionicAnnotator: BionicAnnotator,
 ) : ViewModel() {
@@ -62,27 +66,51 @@ class ReaderViewModel @Inject constructor(
     private var pendingSaveJob: Job? = null
     private var latestPendingProgress: Progress? = null
     private var preWarmJob: Job? = null
+    private var pendingIntensityJob: Job? = null
+    private var pendingFontSizeJob: Job? = null
 
     private var currentFontSizeSp: Int = ReaderUiState.DEFAULT_FONT_SIZE_SP
     private var currentBionicIntensity: Float = BionicEngine.DEFAULT_INTENSITY
+    private var currentBionicEnabled: Boolean = true
+    private var currentNightMode: NightMode = NightMode.SYSTEM
 
     init {
         loadBook()
-        collectFontSizePreference()
+        collectUserPreferences()
     }
 
-    private fun collectFontSizePreference() {
+    private fun collectUserPreferences() {
         viewModelScope.launch {
             getUserPreferences()
                 .map { it.defaultFontSizeSp }
                 .distinctUntilChanged()
                 .debounce(FONT_DEBOUNCE_MS)
                 .collect { fontSizeSp ->
+                    if (currentFontSizeSp == fontSizeSp) return@collect
                     currentFontSizeSp = fontSizeSp
                     bionicCache.evictAll()
                     val current = _uiState.value as? ReaderUiState.Success ?: return@collect
                     _uiState.value = current.copy(fontSizeSp = fontSizeSp)
                     warmCacheAround(current.pages, current.currentPageIndex)
+                }
+        }
+        viewModelScope.launch {
+            getUserPreferences()
+                .map { prefs -> Triple(prefs.bionicIntensity, prefs.bionicEnabled, prefs.nightMode) }
+                .distinctUntilChanged()
+                .collect { (intensity, enabled, mode) ->
+                    val intensityChanged = currentBionicIntensity != intensity
+                    currentBionicIntensity = intensity
+                    currentBionicEnabled = enabled
+                    currentNightMode = mode
+                    if (intensityChanged) bionicCache.evictAll()
+                    val current = _uiState.value as? ReaderUiState.Success ?: return@collect
+                    _uiState.value = current.copy(
+                        bionicIntensity = intensity,
+                        bionicEnabled = enabled,
+                        nightMode = mode,
+                    )
+                    if (intensityChanged) warmCacheAround(current.pages, current.currentPageIndex)
                 }
         }
     }
@@ -128,6 +156,9 @@ class ReaderViewModel @Inject constructor(
                                         totalPages = result.totalPages,
                                         fontSizeSp = currentFontSizeSp,
                                         controlsVisible = previous?.controlsVisible ?: false,
+                                        bionicIntensity = currentBionicIntensity,
+                                        bionicEnabled = currentBionicEnabled,
+                                        nightMode = currentNightMode,
                                     )
                                 }
                             }
@@ -176,15 +207,20 @@ class ReaderViewModel @Inject constructor(
             ReaderIntent.ToggleControls -> toggleControls()
             ReaderIntent.DeleteBook -> onDeleteBook()
             ReaderIntent.NavigateBack -> onNavigateBack()
+            is ReaderIntent.SetBionicIntensity -> onSetBionicIntensity(intent.intensity)
+            is ReaderIntent.SetFontSize -> onSetFontSize(intent.fontSizeSp)
+            is ReaderIntent.SetBionicEnabled -> onSetBionicEnabled(intent.enabled)
+            is ReaderIntent.SetNightMode -> onSetNightMode(intent.nightMode)
         }
     }
 
     /**
      * Returns a bionic-annotated [AnnotatedString] for [pageIndex], computing and
-     * caching it on first access. Returns null if the reader is not in the Success state
-     * or the page index is out of range.
+     * caching it on first access. Returns null if bionic is disabled, the reader is not
+     * in the Success state, or the page index is out of range.
      */
     fun getAnnotatedPage(pageIndex: Int): androidx.compose.ui.text.AnnotatedString? {
+        if (!currentBionicEnabled) return null
         val state = _uiState.value as? ReaderUiState.Success ?: return null
         val page = state.pages.getOrNull(pageIndex) ?: return null
         val key = PageCacheKey(bookId, page.index, currentBionicIntensity, currentFontSizeSp)
@@ -202,6 +238,53 @@ class ReaderViewModel @Inject constructor(
                 bionicCache.getOrPut(key, page.text)
             }
         }
+    }
+
+    private fun onSetBionicIntensity(intensity: Float) {
+        val clamped = intensity.coerceIn(MIN_BIONIC_INTENSITY, MAX_BIONIC_INTENSITY)
+        currentBionicIntensity = clamped
+        bionicCache.evictAll()
+        val current = _uiState.value as? ReaderUiState.Success
+        if (current != null) {
+            _uiState.value = current.copy(bionicIntensity = clamped)
+            warmCacheAround(current.pages, current.currentPageIndex)
+        }
+        pendingIntensityJob?.cancel()
+        pendingIntensityJob = viewModelScope.launch {
+            delay(SLIDER_DEBOUNCE_MS)
+            saveUserPreferences(PreferenceUpdate.BionicIntensity(clamped))
+        }
+    }
+
+    private fun onSetFontSize(fontSizeSp: Int) {
+        val clamped = fontSizeSp.coerceIn(14, 28)
+        currentFontSizeSp = clamped
+        bionicCache.evictAll()
+        val current = _uiState.value as? ReaderUiState.Success
+        if (current != null) {
+            _uiState.value = current.copy(fontSizeSp = clamped)
+            warmCacheAround(current.pages, current.currentPageIndex)
+        }
+        pendingFontSizeJob?.cancel()
+        pendingFontSizeJob = viewModelScope.launch {
+            delay(SLIDER_DEBOUNCE_MS)
+            saveUserPreferences(PreferenceUpdate.FontSize(clamped))
+        }
+    }
+
+    private fun onSetBionicEnabled(enabled: Boolean) {
+        currentBionicEnabled = enabled
+        val current = _uiState.value as? ReaderUiState.Success ?: return
+        _uiState.value = current.copy(bionicEnabled = enabled)
+        if (enabled) warmCacheAround(current.pages, current.currentPageIndex)
+        viewModelScope.launch { saveUserPreferences(PreferenceUpdate.BionicEnabled(enabled)) }
+    }
+
+    private fun onSetNightMode(nightMode: NightMode) {
+        currentNightMode = nightMode
+        val current = _uiState.value as? ReaderUiState.Success ?: return
+        _uiState.value = current.copy(nightMode = nightMode)
+        viewModelScope.launch { saveUserPreferences(PreferenceUpdate.Theme(nightMode)) }
     }
 
     private fun onPageChanged(pageIndex: Int) {
@@ -251,6 +334,9 @@ class ReaderViewModel @Inject constructor(
     companion object {
         internal const val DEBOUNCE_MS = 500L
         internal const val FONT_DEBOUNCE_MS = 300L
+        internal const val SLIDER_DEBOUNCE_MS = 200L
         internal const val PRE_WARM_WINDOW = 2
+        private const val MIN_BIONIC_INTENSITY = 0.3f
+        private const val MAX_BIONIC_INTENSITY = 0.8f
     }
 }

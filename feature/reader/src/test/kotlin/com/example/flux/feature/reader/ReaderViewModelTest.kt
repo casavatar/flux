@@ -5,9 +5,9 @@ import androidx.lifecycle.SavedStateHandle
 import com.example.flux.data.bionic.BionicAnnotator
 import com.example.flux.data.parser.DocumentParserFactory
 import com.example.flux.domain.bionic.BionicEngine
-import com.example.flux.domain.bionic.StyledWord
 import com.example.flux.domain.model.Book
 import com.example.flux.domain.model.BookFormat
+import com.example.flux.domain.model.NightMode
 import com.example.flux.domain.model.Progress
 import com.example.flux.domain.source.DocumentParser
 import com.example.flux.domain.source.ParseResult
@@ -16,7 +16,9 @@ import com.example.flux.domain.usecase.DeleteBookUseCase
 import com.example.flux.domain.usecase.GetBookByIdUseCase
 import com.example.flux.domain.usecase.GetReadingProgressUseCase
 import com.example.flux.domain.usecase.GetUserPreferencesUseCase
+import com.example.flux.domain.usecase.PreferenceUpdate
 import com.example.flux.domain.usecase.SaveReadingProgressUseCase
+import com.example.flux.domain.usecase.SaveUserPreferencesUseCase
 import com.example.flux.feature.reader.model.ReaderIntent
 import com.example.flux.feature.reader.model.ReaderUiState
 import io.mockk.coEvery
@@ -40,7 +42,8 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * Verifies debounced progress persistence and saved-page restoration.
+ * Verifies debounced progress persistence, saved-page restoration, and slider debounce for
+ * bionic/font-size preferences.
  *
  * Virtual time is controlled by [UnconfinedTestDispatcher] via [MainDispatcherRule]: coroutines
  * start eagerly so delays are registered immediately, making [advanceTimeBy] fire them
@@ -61,6 +64,7 @@ class ReaderViewModelTest {
     private val saveReadingProgress = mockk<SaveReadingProgressUseCase>()
     private val deleteBook = mockk<DeleteBookUseCase>()
     private val getUserPreferences = mockk<GetUserPreferencesUseCase>()
+    private val saveUserPreferences = mockk<SaveUserPreferencesUseCase>()
     private val fakePrefs = MutableStateFlow(UserPreferences())
 
     private val fakeBook = Book(
@@ -76,6 +80,7 @@ class ReaderViewModelTest {
     @Before
     fun setUp() {
         coJustRun { saveReadingProgress(any()) }
+        coJustRun { saveUserPreferences(any()) }
         every { getUserPreferences() } returns fakePrefs
         every { bionicEngine.annotate(any(), any(), any(), any()) } returns emptyList()
         every { bionicAnnotator.annotate(any(), any(), any()) } returns AnnotatedString("")
@@ -106,11 +111,12 @@ class ReaderViewModelTest {
         saveReadingProgress = saveReadingProgress,
         deleteBook = deleteBook,
         getUserPreferences = getUserPreferences,
+        saveUserPreferences = saveUserPreferences,
         bionicEngine = bionicEngine,
         bionicAnnotator = bionicAnnotator,
     )
 
-    // ── debounce ──────────────────────────────────────────────────────────────
+    // ── debounce (reading progress) ───────────────────────────────────────────
 
     @Test
     fun `rapid page flips result in zero saves before debounce window`() =
@@ -432,5 +438,152 @@ class ReaderViewModelTest {
             coVerify(exactly = 1) { deleteBook("book-1") }
             assertEquals(1, events.size)
             job.cancel()
+        }
+
+    // ── bionic intensity debounce ─────────────────────────────────────────────
+
+    @Test
+    fun `rapid intensity changes result in zero preference saves before slider debounce`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            setupBookLoad(pageCount = 5)
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            listOf(0.3f, 0.4f, 0.5f, 0.6f, 0.7f).forEach {
+                vm.onIntent(ReaderIntent.SetBionicIntensity(it))
+            }
+            advanceTimeBy(ReaderViewModel.SLIDER_DEBOUNCE_MS - 1)
+
+            coVerify(exactly = 0) { saveUserPreferences(any()) }
+        }
+
+    @Test
+    fun `rapid intensity changes result in exactly one preference save after slider debounce`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            setupBookLoad(pageCount = 5)
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            listOf(0.3f, 0.4f, 0.5f, 0.6f, 0.7f).forEach {
+                vm.onIntent(ReaderIntent.SetBionicIntensity(it))
+            }
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { saveUserPreferences(any()) }
+        }
+
+    @Test
+    fun `slider debounce persists the last intensity in a rapid storm`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            setupBookLoad(pageCount = 5)
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            listOf(0.3f, 0.4f, 0.5f, 0.6f, 0.7f).forEach {
+                vm.onIntent(ReaderIntent.SetBionicIntensity(it))
+            }
+            advanceUntilIdle()
+
+            coVerify { saveUserPreferences(PreferenceUpdate.BionicIntensity(0.7f)) }
+        }
+
+    @Test
+    fun `SetBionicIntensity updates bionicIntensity in Success state immediately`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            setupBookLoad(pageCount = 5)
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.onIntent(ReaderIntent.SetBionicIntensity(0.6f))
+
+            val state = vm.uiState.value as ReaderUiState.Success
+            assertEquals(0.6f, state.bionicIntensity, 0.001f)
+        }
+
+    // ── font size slider debounce ─────────────────────────────────────────────
+
+    @Test
+    fun `rapid SetFontSize changes result in zero saves before slider debounce`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            setupBookLoad(pageCount = 5)
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            (14..20).forEach { sp -> vm.onIntent(ReaderIntent.SetFontSize(sp)) }
+            advanceTimeBy(ReaderViewModel.SLIDER_DEBOUNCE_MS - 1)
+
+            coVerify(exactly = 0) { saveUserPreferences(any()) }
+        }
+
+    @Test
+    fun `rapid SetFontSize changes result in exactly one save after slider debounce`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            setupBookLoad(pageCount = 5)
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            (14..20).forEach { sp -> vm.onIntent(ReaderIntent.SetFontSize(sp)) }
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { saveUserPreferences(any()) }
+        }
+
+    @Test
+    fun `SetFontSize updates fontSizeSp in Success state immediately`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            setupBookLoad(pageCount = 5)
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.onIntent(ReaderIntent.SetFontSize(22))
+
+            val state = vm.uiState.value as ReaderUiState.Success
+            assertEquals(22, state.fontSizeSp)
+        }
+
+    // ── bionic enabled / night mode ───────────────────────────────────────────
+
+    @Test
+    fun `SetBionicEnabled false updates state immediately and saves without debounce`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            setupBookLoad(pageCount = 5)
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.onIntent(ReaderIntent.SetBionicEnabled(false))
+            advanceUntilIdle()
+
+            val state = vm.uiState.value as ReaderUiState.Success
+            assertEquals(false, state.bionicEnabled)
+            coVerify(exactly = 1) { saveUserPreferences(PreferenceUpdate.BionicEnabled(false)) }
+        }
+
+    @Test
+    fun `SetNightMode updates nightMode in state and saves without debounce`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            setupBookLoad(pageCount = 5)
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.onIntent(ReaderIntent.SetNightMode(NightMode.SEPIA))
+            advanceUntilIdle()
+
+            val state = vm.uiState.value as ReaderUiState.Success
+            assertEquals(NightMode.SEPIA, state.nightMode)
+            coVerify(exactly = 1) { saveUserPreferences(PreferenceUpdate.Theme(NightMode.SEPIA)) }
+        }
+
+    @Test
+    fun `bionic preferences from UserPreferences are reflected in Success state on load`() =
+        runTest(mainDispatcherRule.testDispatcher) {
+            fakePrefs.value = UserPreferences(bionicIntensity = 0.7f, bionicEnabled = false, nightMode = NightMode.DARK)
+            setupBookLoad(pageCount = 5)
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val state = vm.uiState.value as ReaderUiState.Success
+            assertEquals(0.7f, state.bionicIntensity, 0.001f)
+            assertEquals(false, state.bionicEnabled)
+            assertEquals(NightMode.DARK, state.nightMode)
         }
 }

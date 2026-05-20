@@ -10,6 +10,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -19,6 +20,7 @@ import com.example.flux.feature.reader.model.ReaderPage
 fun ReaderPageContent(
     page: ReaderPage,
     fontSizeSp: Int,
+    annotatedText: AnnotatedString?,
     onTap: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -33,7 +35,7 @@ fun ReaderPageContent(
             .padding(horizontal = 24.dp, vertical = 16.dp),
     ) {
         Text(
-            text = page.text,
+            text = annotatedText ?: AnnotatedString(page.text),
             style = MaterialTheme.typography.bodyLarge.copy(
                 fontSize = fontSizeSp.sp,
                 lineHeight = (fontSizeSp * 1.6f).sp,

@@ -9,6 +9,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,6 +20,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -34,10 +36,14 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -63,6 +69,7 @@ fun ReaderScreen(
         uiState = uiState,
         onNavigateBack = onNavigateBack,
         onIntent = viewModel::onIntent,
+        getAnnotatedPage = viewModel::getAnnotatedPage,
         modifier = modifier,
     )
 }
@@ -72,6 +79,7 @@ internal fun ReaderContent(
     uiState: ReaderUiState,
     onNavigateBack: () -> Unit,
     onIntent: (ReaderIntent) -> Unit,
+    getAnnotatedPage: (Int) -> AnnotatedString? = { null },
     modifier: Modifier = Modifier,
 ) {
     when (val state = uiState) {
@@ -93,6 +101,7 @@ internal fun ReaderContent(
             ReaderSuccessContent(
                 state = state,
                 onIntent = onIntent,
+                getAnnotatedPage = getAnnotatedPage,
                 modifier = modifier,
             )
         }
@@ -158,8 +167,11 @@ private fun ReaderErrorContent(
 private fun ReaderSuccessContent(
     state: ReaderUiState.Success,
     onIntent: (ReaderIntent) -> Unit,
+    getAnnotatedPage: (Int) -> AnnotatedString?,
     modifier: Modifier = Modifier,
 ) {
+    var showSettings by rememberSaveable { mutableStateOf(false) }
+
     val pagerState = rememberPagerState(
         initialPage = state.currentPageIndex,
         pageCount = { state.totalPages },
@@ -186,6 +198,7 @@ private fun ReaderSuccessContent(
                 ReaderPageContent(
                     page = page,
                     fontSizeSp = state.fontSizeSp,
+                    annotatedText = getAnnotatedPage(pageIndex),
                     onTap = { onIntent(ReaderIntent.ToggleControls) },
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -226,25 +239,47 @@ private fun ReaderSuccessContent(
             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
         ) {
             Surface(shadowElevation = 4.dp) {
-                Column(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                        .padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    LinearProgressIndicator(
-                        progress = { (state.currentPageIndex + 1f) / state.totalPages },
-                        modifier = Modifier.fillMaxWidth(),
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = Color.Transparent,
-                    )
-                    Text(
-                        text = "${state.currentPageIndex + 1} / ${state.totalPages}",
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        LinearProgressIndicator(
+                            progress = { (state.currentPageIndex + 1f) / state.totalPages },
+                            modifier = Modifier.fillMaxWidth(),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = Color.Transparent,
+                        )
+                        Text(
+                            text = "${state.currentPageIndex + 1} / ${state.totalPages}",
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
+                    IconButton(onClick = { showSettings = true }) {
+                        Icon(
+                            imageVector = Icons.Filled.Settings,
+                            contentDescription = "Reading settings",
+                        )
+                    }
                 }
             }
         }
+    }
+
+    if (showSettings) {
+        ReaderSettingsSheet(
+            bionicEnabled = state.bionicEnabled,
+            bionicIntensity = state.bionicIntensity,
+            fontSizeSp = state.fontSizeSp,
+            nightMode = state.nightMode,
+            onIntent = onIntent,
+            onDismiss = { showSettings = false },
+        )
     }
 }
