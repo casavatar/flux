@@ -95,3 +95,49 @@ val FluxDarkColorScheme = darkColorScheme(
     onSurfaceVariant = onSurfaceVariantDark,
     outline = outlineDark,
 )
+
+// --- Sepia palette (warm paper tone) ---
+private val primarySepia = Color(0xFF6B4C3B)
+private val onPrimarySepia = Color(0xFFFFFFFF)
+private val primaryContainerSepia = Color(0xFFE8C9B0)
+private val onPrimaryContainerSepia = Color(0xFF2E1507)
+
+private val secondarySepia = Color(0xFF8B6B55)
+private val onSecondarySepia = Color(0xFFFFFFFF)
+private val secondaryContainerSepia = Color(0xFFD4B49A)
+private val onSecondaryContainerSepia = Color(0xFF2E1507)
+
+private val tertiarySepia = Color(0xFF7B5E4A)
+private val onTertiarySepia = Color(0xFFFFFFFF)
+private val tertiaryContainerSepia = Color(0xFFE8C9A8)
+private val onTertiaryContainerSepia = Color(0xFF2E1507)
+
+private val backgroundSepia = Color(0xFFF4EAD5)
+private val onBackgroundSepia = Color(0xFF3D2B1F)
+private val surfaceSepia = Color(0xFFF4EAD5)
+private val onSurfaceSepia = Color(0xFF3D2B1F)
+private val surfaceVariantSepia = Color(0xFFE8D5BC)
+private val onSurfaceVariantSepia = Color(0xFF5C4033)
+private val outlineSepia = Color(0xFF9C7B65)
+
+val FluxSepiaColorScheme = lightColorScheme(
+    primary = primarySepia,
+    onPrimary = onPrimarySepia,
+    primaryContainer = primaryContainerSepia,
+    onPrimaryContainer = onPrimaryContainerSepia,
+    secondary = secondarySepia,
+    onSecondary = onSecondarySepia,
+    secondaryContainer = secondaryContainerSepia,
+    onSecondaryContainer = onSecondaryContainerSepia,
+    tertiary = tertiarySepia,
+    onTertiary = onTertiarySepia,
+    tertiaryContainer = tertiaryContainerSepia,
+    onTertiaryContainer = onTertiaryContainerSepia,
+    background = backgroundSepia,
+    onBackground = onBackgroundSepia,
+    surface = surfaceSepia,
+    onSurface = onSurfaceSepia,
+    surfaceVariant = surfaceVariantSepia,
+    onSurfaceVariant = onSurfaceVariantSepia,
+    outline = outlineSepia,
+)

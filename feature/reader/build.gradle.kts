@@ -17,6 +17,8 @@ dependencies {
     implementation(project(":core:domain"))
     implementation(project(":core:data"))
 
+    implementation(libs.androidx.core.ktx)
+
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
     implementation(libs.compose.foundation)
@@ -33,4 +35,10 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.turbine)
+
+    androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation(libs.compose.ui.test.junit4)
+    androidTestImplementation(libs.androidx.test.junit)
+    androidTestImplementation(libs.espresso.accessibility)
+    debugImplementation(libs.compose.ui.test.manifest)
 }

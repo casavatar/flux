@@ -1,11 +1,15 @@
 package com.example.flux.feature.reader
 
+import android.app.Activity
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,7 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
@@ -34,21 +38,30 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.flux.domain.model.NightMode
 import com.example.flux.feature.reader.model.ReaderIntent
 import com.example.flux.feature.reader.model.ReaderUiState
 
@@ -122,7 +135,7 @@ private fun ReaderErrorContent(
             title = { Text("Broken Book") },
             navigationIcon = {
                 IconButton(onClick = onNavigateBack) {
-                    Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                 }
             },
         )
@@ -189,83 +202,85 @@ private fun ReaderSuccessContent(
         }
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxSize(),
-        ) { pageIndex ->
-            state.pages.getOrNull(pageIndex)?.let { page ->
-                ReaderPageContent(
-                    page = page,
-                    fontSizeSp = state.fontSizeSp,
-                    annotatedText = getAnnotatedPage(pageIndex),
-                    onTap = { onIntent(ReaderIntent.ToggleControls) },
-                    modifier = Modifier.fillMaxSize(),
-                )
+    ReadingThemeWrapper(nightMode = state.nightMode, modifier = modifier) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+            ) { pageIndex ->
+                state.pages.getOrNull(pageIndex)?.let { page ->
+                    ReaderPageContent(
+                        page = page,
+                        fontSizeSp = state.fontSizeSp,
+                        annotatedText = getAnnotatedPage(pageIndex),
+                        onTap = { onIntent(ReaderIntent.ToggleControls) },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
             }
-        }
 
-        AnimatedVisibility(
-            visible = state.controlsVisible,
-            enter = slideInVertically { -it } + fadeIn(),
-            exit = slideOutVertically { -it } + fadeOut(),
-            modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth(),
-        ) {
-            Surface(shadowElevation = 4.dp) {
-                TopAppBar(
-                    title = {
-                        Text(
-                            text = state.book.title,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = { onIntent(ReaderIntent.NavigateBack) }) {
-                            Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                    ),
-                )
+            AnimatedVisibility(
+                visible = state.controlsVisible,
+                enter = slideInVertically { -it } + fadeIn(),
+                exit = slideOutVertically { -it } + fadeOut(),
+                modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth(),
+            ) {
+                Surface(shadowElevation = 4.dp) {
+                    TopAppBar(
+                        title = {
+                            Text(
+                                text = state.book.title,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = { onIntent(ReaderIntent.NavigateBack) }) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.surface,
+                        ),
+                    )
+                }
             }
-        }
 
-        AnimatedVisibility(
-            visible = state.controlsVisible,
-            enter = slideInVertically { it } + fadeIn(),
-            exit = slideOutVertically { it } + fadeOut(),
-            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
-        ) {
-            Surface(shadowElevation = 4.dp) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        horizontalAlignment = Alignment.CenterHorizontally,
+            AnimatedVisibility(
+                visible = state.controlsVisible,
+                enter = slideInVertically { it } + fadeIn(),
+                exit = slideOutVertically { it } + fadeOut(),
+                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+            ) {
+                Surface(shadowElevation = 4.dp) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        LinearProgressIndicator(
-                            progress = { (state.currentPageIndex + 1f) / state.totalPages },
-                            modifier = Modifier.fillMaxWidth(),
-                            color = MaterialTheme.colorScheme.primary,
-                            trackColor = Color.Transparent,
-                        )
-                        Text(
-                            text = "${state.currentPageIndex + 1} / ${state.totalPages}",
-                            style = MaterialTheme.typography.labelMedium,
-                            modifier = Modifier.padding(top = 4.dp),
-                        )
-                    }
-                    IconButton(onClick = { showSettings = true }) {
-                        Icon(
-                            imageVector = Icons.Filled.Settings,
-                            contentDescription = "Reading settings",
-                        )
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            LinearProgressIndicator(
+                                progress = { (state.currentPageIndex + 1f) / state.totalPages },
+                                modifier = Modifier.fillMaxWidth(),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = Color.Transparent,
+                            )
+                            Text(
+                                text = "${state.currentPageIndex + 1} / ${state.totalPages}",
+                                style = MaterialTheme.typography.labelMedium,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
+                        IconButton(onClick = { showSettings = true }) {
+                            Icon(
+                                imageVector = Icons.Filled.Settings,
+                                contentDescription = "Reading settings",
+                            )
+                        }
                     }
                 }
             }
@@ -280,6 +295,69 @@ private fun ReaderSuccessContent(
             nightMode = state.nightMode,
             onIntent = onIntent,
             onDismiss = { showSettings = false },
+        )
+    }
+}
+
+@Composable
+private fun ReadingThemeWrapper(
+    nightMode: NightMode,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val systemDark = isSystemInDarkTheme()
+    val (targetBg, targetContent) = when (nightMode) {
+        NightMode.LIGHT -> Color(0xFFFFFFFF) to Color(0xFF1A1A1A)
+        NightMode.DARK -> Color(0xFF1A1A2E) to Color(0xFFE8E8E8)
+        NightMode.SEPIA -> Color(0xFFF4EAD5) to Color(0xFF3D2B1F)
+        NightMode.SYSTEM -> if (systemDark) Color(0xFF1A1A2E) to Color(0xFFE8E8E8)
+                            else Color(0xFFFFFFFF) to Color(0xFF1A1A1A)
+    }
+
+    val bgColor by animateColorAsState(
+        targetValue = targetBg,
+        animationSpec = tween(durationMillis = 300),
+        label = "readerBg",
+    )
+    val contentColor by animateColorAsState(
+        targetValue = targetContent,
+        animationSpec = tween(durationMillis = 300),
+        label = "readerContent",
+    )
+
+    val view = LocalView.current
+    val isLight = targetBg.luminance() > 0.5f
+
+    SideEffect {
+        if (!view.isInEditMode) {
+            val window = (view.context as Activity).window
+            @Suppress("DEPRECATION")
+            window.statusBarColor = bgColor.toArgb()
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = isLight
+        }
+    }
+
+    DisposableEffect(view) {
+        if (!view.isInEditMode) {
+            val window = (view.context as Activity).window
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+        }
+        onDispose {
+            if (!view.isInEditMode) {
+                val window = (view.context as Activity).window
+                WindowCompat.setDecorFitsSystemWindows(window, true)
+                @Suppress("DEPRECATION")
+                window.statusBarColor = android.graphics.Color.TRANSPARENT
+            }
+        }
+    }
+
+    CompositionLocalProvider(LocalContentColor provides contentColor) {
+        Surface(
+            color = bgColor,
+            contentColor = contentColor,
+            modifier = modifier,
+            content = content,
         )
     }
 }

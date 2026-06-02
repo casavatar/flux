@@ -1,5 +1,5 @@
 [versions]
-agp = "8.2.0"
+agp = "8.4.0"
 desugar-jdk-libs = "2.0.4"
 kotlin = "2.0.0"
 hilt = "2.48"
@@ -14,6 +14,8 @@ coil = "2.6.0"
 mockk = "1.13.8"
 turbine = "1.1.0"
 paparazzi = "1.3.4"
+benchmark = "1.3.0"
+uiautomator = "2.3.0"
 junit4 = "4.13.2"
 junit-ext = "1.1.5"
 espresso = "3.5.1"
@@ -89,7 +91,12 @@ mockk              = { group = "io.mockk",                name = "mockk",       
 kotlin-test        = { group = "org.jetbrains.kotlin",    name = "kotlin-test"                              }
 androidx-test-junit = { group = "androidx.test.ext",      name = "junit",          version.ref = "junit-ext" }
 turbine             = { group = "app.cash.turbine",       name = "turbine",         version.ref = "turbine"   }
-espresso-core      = { group = "androidx.test.espresso",  name = "espresso-core",  version.ref = "espresso" }
+espresso-core              = { group = "androidx.test.espresso", name = "espresso-core",          version.ref = "espresso" }
+espresso-accessibility     = { group = "androidx.test.espresso", name = "espresso-accessibility", version.ref = "espresso" }
+
+# Macrobenchmark
+benchmark-macro-junit4 = { group = "androidx.benchmark", name = "benchmark-macro-junit4", version.ref = "benchmark" }
+uiautomator            = { group = "androidx.test.uiautomator", name = "uiautomator",          version.ref = "uiautomator" }
 
 [plugins]
 android-application  = { id = "com.android.application",               version.ref = "agp"    }
